@@ -4,7 +4,7 @@ const ctx = canvas.getContext('2d');
 
 // Canvas dimensions
 const STAFF_WIDTH = 1200;
-const STAFF_TOP = 100; // top of first staff system
+const STAFF_TOP = 160; // top of first staff system (increased to give more space for title/key)
 const STAFF_SPACING = 20; // Space between staff lines
 const NOTE_WIDTH = 30;
 const NOTE_HEIGHT = 20;
@@ -211,6 +211,9 @@ const SHARP_POSITIONS = {
 // Store notes
 let notes = [];
 let noteHistory = [];
+
+// Store title
+let sheetTitle = '';
 
 // Hover preview + selection state
 let hoveredPlacement = null; // { x, staffIndex, step, y, note, octave, duration }
@@ -610,9 +613,74 @@ function drawFlagsForUnbeamedNotes(notesIn, beamedNoteIds) {
     ctx.restore();
 }
 
+// Find the highest (smallest Y) drawn content from notes and hover preview
+function getHighestContentY() {
+    let minY = Infinity;
+
+    // Existing notes
+    for (const n of notes) {
+        const y = staffStepToY(n.step, n.staffIndex ?? 0);
+        if (y < minY) minY = y;
+    }
+
+    // Hover preview note
+    if (hoveredPlacement) {
+        if (hoveredPlacement.y < minY) minY = hoveredPlacement.y;
+    }
+
+    return Number.isFinite(minY) ? minY : null;
+}
+
+// Draw title and key label
+function drawTitleAndKey() {
+    if (!sheetTitle) return;
+
+    ctx.save();
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'top';
+    const centerX = STAFF_WIDTH / 2;
+
+    // Base positions and sizing for title block
+    const baseTitleY = 20;
+    const keyOffsetFromTitle = 44;   // vertical distance from title to "Key of ..."
+    const approximateTitleHeight = 40;
+    const approximateKeyHeight = 26;
+    const blockHeight = approximateTitleHeight + keyOffsetFromTitle + approximateKeyHeight;
+    const marginToNotes = 30;        // extra breathing room above highest notes (increased to be less sensitive)
+    const minTitleY = 5;              // minimum Y position so title never goes off page
+
+    // Adjust vertically if notes/hover would collide with the title block
+    let titleY = baseTitleY;
+    const highestContentY = getHighestContentY();
+    if (highestContentY !== null) {
+        const baseBlockBottom = baseTitleY + blockHeight;
+        // Only adjust if notes are actually close to overlapping (within margin)
+        if (highestContentY < baseBlockBottom + marginToNotes) {
+            const shiftUp = baseBlockBottom + marginToNotes - highestContentY;
+            titleY = Math.max(minTitleY, baseTitleY - shiftUp);
+        }
+    }
+
+    // Title
+    ctx.font = 'bold 48px serif';
+    ctx.fillStyle = '#333';
+    ctx.fillText(sheetTitle, centerX, titleY);
+
+    // Key label under the title, using current key signature
+    ctx.font = '24px serif';
+    const keyLabelY = titleY + keyOffsetFromTitle;
+    ctx.fillText(`Key of ${currentKey}`, centerX, keyLabelY);
+
+    ctx.restore();
+}
+
 // Redraw everything
 function redraw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
+    
+    // Draw title + key first (at the top)
+    drawTitleAndKey();
+    
     for (let i = 0; i < staffCount; i++) {
         drawStaff(i);
     }
@@ -1005,6 +1073,18 @@ function addLine() {
 }
 
 document.getElementById('add-line-btn').addEventListener('click', addLine);
+
+// Handle add title button
+function addTitle() {
+    const currentTitle = sheetTitle || '';
+    const newTitle = prompt('Enter the title for your sheet music:', currentTitle);
+    if (newTitle !== null) {
+        sheetTitle = newTitle.trim();
+        redraw();
+    }
+}
+
+document.getElementById('add-title-btn').addEventListener('click', addTitle);
 
 // Initialize history so undo works from first action
 pushHistory();
