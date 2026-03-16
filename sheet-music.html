@@ -44,31 +44,11 @@
             </div>
             
             <div class="toolbar-section">
-                <label for="note-select">Note:</label>
-                <select id="note-select">
-                    <option value="C">C</option>
-                    <option value="C#">C#</option>
-                    <option value="D">D</option>
-                    <option value="D#">D#</option>
-                    <option value="E">E</option>
-                    <option value="F">F</option>
-                    <option value="F#">F#</option>
-                    <option value="G">G</option>
-                    <option value="G#">G#</option>
-                    <option value="A">A</option>
-                    <option value="A#">A#</option>
-                    <option value="B">B</option>
-                </select>
-            </div>
-            
-            <div class="toolbar-section">
-                <label for="octave-select">Octave:</label>
-                <select id="octave-select">
-                    <option value="2">2</option>
-                    <option value="3" selected>3</option>
-                    <option value="4">4</option>
-                    <option value="5">5</option>
-                </select>
+                <label>Edit note:</label>
+                <button id="acc-sharp-btn" class="btn btn-secondary" type="button" title="Set selected note to sharp (♯)">♯</button>
+                <button id="acc-flat-btn" class="btn btn-secondary" type="button" title="Set selected note to flat (♭)">♭</button>
+                <button id="acc-natural-btn" class="btn btn-secondary" type="button" title="Set selected note to natural (♮)">♮</button>
+                <button id="delete-note-btn" class="btn btn-secondary" type="button" title="Delete selected note">Delete</button>
             </div>
             
             <div class="toolbar-section">
@@ -93,7 +73,7 @@
         </div>
         
         <div class="instructions">
-            <p><strong>Instructions:</strong> Click on the staff to add notes. Select the note, octave, and duration from the toolbar above.</p>
+            <p><strong>Instructions:</strong> Hover over the staff to preview placement, then click to place a note. Notes automatically use the key signature (sharps/flats). Use the Duration dropdown to choose note type. Click an existing note to select it, then set ♯/♭/♮ or delete.</p>
         </div>
     </div>
     

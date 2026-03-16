@@ -190,6 +190,11 @@ const SHARP_POSITIONS = {
 let notes = [];
 let noteHistory = [];
 
+// Hover preview + selection state
+let hoveredPlacement = null; // { x, step, y, note, octave, duration }
+let selectedNoteId = null;
+let nextNoteId = 1;
+
 // Set canvas size
 canvas.width = STAFF_WIDTH;
 canvas.height = STAFF_HEIGHT;
@@ -301,15 +306,34 @@ function drawStaff() {
 }
 
 // Draw a note
-function drawNote(x, y, note, octave, duration) {
+function drawNote(x, y, note, octave, duration, isSelected = false, isPreview = false) {
     const noteKey = getNoteKey(note, octave);
     const noteY = getNoteYPosition(note, octave);
     
     // Draw note head
-    ctx.fillStyle = '#000';
+    ctx.fillStyle = isSelected ? '#1f5fbf' : '#000';
     ctx.beginPath();
     ctx.ellipse(x, noteY, NOTE_WIDTH / 2, NOTE_HEIGHT / 2, 0, 0, 2 * Math.PI);
     ctx.fill();
+
+    if (isSelected) {
+        ctx.save();
+        ctx.strokeStyle = '#1f5fbf';
+        ctx.lineWidth = 3;
+        ctx.beginPath();
+        ctx.ellipse(x, noteY, NOTE_WIDTH / 2 + 4, NOTE_HEIGHT / 2 + 4, 0, 0, 2 * Math.PI);
+        ctx.stroke();
+        ctx.restore();
+    } else if (isPreview) {
+        ctx.save();
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([6, 4]);
+        ctx.beginPath();
+        ctx.ellipse(x, noteY, NOTE_WIDTH / 2 + 3, NOTE_HEIGHT / 2 + 3, 0, 0, 2 * Math.PI);
+        ctx.stroke();
+        ctx.restore();
+    }
     
     // Draw stem if not whole note
     if (duration !== 'whole') {
@@ -376,8 +400,24 @@ function redraw() {
     
     // Draw all notes
     notes.forEach(note => {
-        drawNote(note.x, note.y, note.note, note.octave, note.duration);
+        drawNote(note.x, note.y, note.note, note.octave, note.duration, note.id === selectedNoteId);
     });
+
+    // Draw hover preview on top
+    if (hoveredPlacement) {
+        ctx.save();
+        ctx.globalAlpha = 0.35;
+        drawNote(
+            hoveredPlacement.x,
+            hoveredPlacement.y,
+            hoveredPlacement.note,
+            hoveredPlacement.octave,
+            hoveredPlacement.duration,
+            false,
+            true
+        );
+        ctx.restore();
+    }
 }
 
 // Get key signature width (for note placement)
@@ -393,32 +433,44 @@ function getKeySignatureWidth() {
 }
 
 // Add note at position
-function addNote(x, y) {
-    const noteSelect = document.getElementById('note-select');
-    const octaveSelect = document.getElementById('octave-select');
+function addNoteFromPlacement(placement) {
     const durationSelect = document.getElementById('duration-select');
-    
-    const note = noteSelect.value;
-    const octave = octaveSelect.value;
     const duration = durationSelect.value;
     
     // Get minimum X position (after key signature)
     const minX = getKeySignatureWidth();
     
     // Snap to grid (every 50 pixels)
-    const snappedX = Math.round(x / 50) * 50;
+    const snappedX = Math.round(placement.x / 50) * 50;
     const snappedXClamped = Math.max(minX, Math.min(STAFF_WIDTH - 100, snappedX));
-    
+
+    const step = placement.step;
+    const pitch = staffStepToPitch(step);
+    if (!pitch) return;
+
+    const note = applyKeySignatureAccidental(pitch.letter);
+
     notes.push({
+        id: String(nextNoteId++),
         x: snappedXClamped,
-        y: y,
-        note: note,
-        octave: octave,
+        step,
+        y: staffStepToY(step),
+        note,
+        octave: pitch.octave,
         duration: duration
     });
     
-    noteHistory.push([...notes]);
+    pushHistory();
     redraw();
+}
+
+function pushHistory() {
+    // Store a deep copy so edits/selection don't mutate history
+    noteHistory.push(JSON.parse(JSON.stringify(notes)));
+    // Keep history from growing unbounded
+    if (noteHistory.length > 200) {
+        noteHistory.shift();
+    }
 }
 
 // Clear all notes
@@ -426,30 +478,164 @@ function clearAll() {
     if (confirm('Are you sure you want to clear all notes?')) {
         notes = [];
         noteHistory = [];
+        selectedNoteId = null;
+        hoveredPlacement = null;
         redraw();
     }
 }
 
 // Undo last note
 function undo() {
-    if (notes.length > 0) {
-        notes.pop();
-        if (noteHistory.length > 0) {
-            noteHistory.pop();
-        }
-        redraw();
+    if (noteHistory.length === 0) return;
+    noteHistory.pop(); // remove current snapshot
+    const prev = noteHistory[noteHistory.length - 1];
+    notes = prev ? JSON.parse(JSON.stringify(prev)) : [];
+    if (selectedNoteId && !notes.some(n => n.id === selectedNoteId)) {
+        selectedNoteId = null;
     }
+    redraw();
 }
 
-// Handle canvas click
+function yToNearestStaffStep(y) {
+    return Math.round((STAFF_LINES[4] - y) / (STAFF_SPACING / 2));
+}
+
+function isWithinStaffBand(y) {
+    return y >= STAFF_TOP - 80 && y <= STAFF_TOP + STAFF_SPACING * 4 + 80;
+}
+
+function staffStepToPitch(step) {
+    // This app's coordinate system is anchored to the existing position maps:
+    // - Treble bottom line corresponds to G2 in TREBLE_NOTE_POSITIONS.
+    // - Bass bottom line corresponds to G1 in BASS_NOTE_POSITIONS.
+    const startOctave = currentClef === 'bass' ? 1 : 2;
+    const letters = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+
+    // step 0 is the bottom line, which is G in this codebase.
+    const startLetterIndex = letters.indexOf('G'); // 4
+    const idx = startLetterIndex + step;
+    const letter = letters[((idx % 7) + 7) % 7];
+
+    // Octave increases whenever we pass from B -> C.
+    // Count how many times the sequence crossed from B to C between 0..step.
+    // We can compute octave offset by simulating the diatonic walk.
+    let octave = startOctave;
+    if (step >= 0) {
+        for (let i = 0; i < step; i++) {
+            const from = letters[(startLetterIndex + i) % 7];
+            const to = letters[(startLetterIndex + i + 1) % 7];
+            if (from === 'B' && to === 'C') octave++;
+        }
+    } else {
+        for (let i = 0; i > step; i--) {
+            const from = letters[((startLetterIndex + i) % 7 + 7) % 7];
+            const to = letters[((startLetterIndex + i - 1) % 7 + 7) % 7];
+            if (from === 'C' && to === 'B') octave--;
+        }
+    }
+
+    return { letter, octave };
+}
+
+function applyKeySignatureAccidental(letter) {
+    const keySig = KEY_SIGNATURES[currentKey];
+    if (!keySig || keySig.type === 'none') return letter;
+    if (keySig.type === 'sharp' && keySig.accidentals.includes(letter)) return `${letter}#`;
+    if (keySig.type === 'flat' && keySig.accidentals.includes(letter)) return `${letter}b`;
+    return letter;
+}
+
+function getSnappedXForCanvasX(x) {
+    const minX = getKeySignatureWidth();
+    const snappedX = Math.round(x / 50) * 50;
+    return Math.max(minX, Math.min(STAFF_WIDTH - 100, snappedX));
+}
+
+function hitTestNote(canvasX, canvasY) {
+    const snappedX = getSnappedXForCanvasX(canvasX);
+    const step = yToNearestStaffStep(canvasY);
+    const y = staffStepToY(step);
+    // Find the closest note at this snapped column + step
+    const thresholdX = NOTE_WIDTH;
+    const thresholdY = NOTE_HEIGHT;
+    let best = null;
+    let bestScore = Infinity;
+    for (const n of notes) {
+        const dx = Math.abs(n.x - snappedX);
+        const dy = Math.abs(getNoteYPosition(n.note, n.octave) - y);
+        if (dx <= thresholdX && dy <= thresholdY) {
+            const score = dx + dy;
+            if (score < bestScore) {
+                best = n;
+                bestScore = score;
+            }
+        }
+    }
+    return best;
+}
+
+function updateHoverFromEvent(e) {
+    const rect = canvas.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const y = e.clientY - rect.top;
+    if (!isWithinStaffBand(y)) {
+        hoveredPlacement = null;
+        redraw();
+        return;
+    }
+
+    const step = yToNearestStaffStep(y);
+    const snappedX = getSnappedXForCanvasX(x);
+    const pitch = staffStepToPitch(step);
+    if (!pitch) {
+        hoveredPlacement = null;
+        redraw();
+        return;
+    }
+
+    const duration = document.getElementById('duration-select').value;
+    hoveredPlacement = {
+        x: snappedX,
+        step,
+        y: staffStepToY(step),
+        note: applyKeySignatureAccidental(pitch.letter),
+        octave: pitch.octave,
+        duration
+    };
+    redraw();
+}
+
+canvas.addEventListener('mousemove', updateHoverFromEvent);
+canvas.addEventListener('mouseleave', () => {
+    hoveredPlacement = null;
+    redraw();
+});
+
+// If the user changes duration while hovering, refresh preview
+document.getElementById('duration-select').addEventListener('change', () => {
+    if (!hoveredPlacement) return;
+    hoveredPlacement.duration = document.getElementById('duration-select').value;
+    redraw();
+});
+
+// Handle canvas click: select existing note, else place a new one
 canvas.addEventListener('click', (e) => {
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    
-    // Only add notes if clicking in the staff area
-    if (y >= STAFF_TOP - 50 && y <= STAFF_TOP + STAFF_SPACING * 4 + 50) {
-        addNote(x, y);
+    if (!isWithinStaffBand(y)) return;
+
+    const hit = hitTestNote(x, y);
+    if (hit) {
+        selectedNoteId = hit.id;
+        redraw();
+        return;
+    }
+
+    // place new note at hovered position (if any)
+    if (hoveredPlacement) {
+        selectedNoteId = null;
+        addNoteFromPlacement(hoveredPlacement);
     }
 });
 
@@ -457,32 +643,10 @@ canvas.addEventListener('click', (e) => {
 function changeClef() {
     const clefSelect = document.getElementById('clef-select');
     currentClef = clefSelect.value;
-    
-    // Update octave selector options based on clef
-    const octaveSelect = document.getElementById('octave-select');
-    octaveSelect.innerHTML = '';
-    
-    if (currentClef === 'bass') {
-        // Bass clef typically uses octaves 2-4
-        for (let i = 2; i <= 4; i++) {
-            const option = document.createElement('option');
-            option.value = i;
-            option.textContent = i;
-            if (i === 3) option.selected = true;
-            octaveSelect.appendChild(option);
-        }
-    } else {
-        // Treble clef typically uses octaves 3-5
-        for (let i = 3; i <= 5; i++) {
-            const option = document.createElement('option');
-            option.value = i;
-            option.textContent = i;
-            if (i === 4) option.selected = true;
-            octaveSelect.appendChild(option);
-        }
-    }
-    
-    // Redraw all notes with new positions
+
+    // Clear selection on clef swap (notes will visually shift in this app's system)
+    selectedNoteId = null;
+    hoveredPlacement = null;
     redraw();
 }
 
@@ -490,6 +654,13 @@ function changeClef() {
 function changeKey() {
     const keySelect = document.getElementById('key-select');
     currentKey = keySelect.value;
+    // Refresh hover preview accidental under the new key
+    if (hoveredPlacement) {
+        const pitch = staffStepToPitch(hoveredPlacement.step);
+        if (pitch) {
+            hoveredPlacement.note = applyKeySignatureAccidental(pitch.letter);
+        }
+    }
     redraw();
 }
 
@@ -499,8 +670,39 @@ document.getElementById('undo-btn').addEventListener('click', undo);
 document.getElementById('clef-select').addEventListener('change', changeClef);
 document.getElementById('key-select').addEventListener('change', changeKey);
 
-// Initialize octave selector for default bass clef
-changeClef();
+function getSelectedNote() {
+    if (!selectedNoteId) return null;
+    return notes.find(n => n.id === selectedNoteId) || null;
+}
+
+function setSelectedAccidental(kind) {
+    const n = getSelectedNote();
+    if (!n) return;
+    const base = n.note.replace('#', '').replace('b', '');
+    if (kind === 'sharp') n.note = `${base}#`;
+    if (kind === 'flat') n.note = `${base}b`;
+    if (kind === 'natural') n.note = base;
+    pushHistory();
+    redraw();
+}
+
+function deleteSelectedNote() {
+    if (!selectedNoteId) return;
+    const idx = notes.findIndex(n => n.id === selectedNoteId);
+    if (idx === -1) return;
+    notes.splice(idx, 1);
+    selectedNoteId = null;
+    pushHistory();
+    redraw();
+}
+
+document.getElementById('acc-sharp-btn').addEventListener('click', () => setSelectedAccidental('sharp'));
+document.getElementById('acc-flat-btn').addEventListener('click', () => setSelectedAccidental('flat'));
+document.getElementById('acc-natural-btn').addEventListener('click', () => setSelectedAccidental('natural'));
+document.getElementById('delete-note-btn').addEventListener('click', deleteSelectedNote);
+
+// Initialize history so undo works from first action
+pushHistory();
 
 // Initial draw
 redraw();
