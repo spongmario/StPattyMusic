@@ -13,6 +13,13 @@ const NOTE_HEIGHT = 20;
 // Staff line positions (5 lines per staff)
 const STAFF_LINES = [0, 1, 2, 3, 4].map(i => STAFF_TOP + i * STAFF_SPACING);
 
+// Convert a staff "step" to a canvas Y coordinate.
+// Define step 0 as the BOTTOM line of the staff, and each line/space is +1 step.
+// So: bottom line = 0, space above = 1, next line = 2, ... top line = 8.
+function staffStepToY(step) {
+    return STAFF_LINES[4] - step * (STAFF_SPACING / 2);
+}
+
 // Current clef (default: bass)
 let currentClef = 'bass';
 
@@ -40,25 +47,33 @@ const KEY_SIGNATURES = {
     'Cb': { type: 'flat', accidentals: ['B', 'E', 'A', 'D', 'G', 'C', 'F'] }
 };
 
-// Staff positions for sharps and flats in treble clef
-const TREBLE_SHARP_POSITIONS = {
-    'F': STAFF_LINES[4],                        // F line (5th line)
-    'C': STAFF_LINES[3] + STAFF_SPACING * 0.5,  // C space (4th space)
-    'G': STAFF_LINES[3],                        // G line (4th line)
-    'D': STAFF_LINES[2] + STAFF_SPACING * 0.5,  // D space (3rd space)
-    'A': STAFF_LINES[2],                        // A line (3rd line)
-    'E': STAFF_LINES[1] + STAFF_SPACING * 0.5,  // E space (2nd space)
-    'B': STAFF_LINES[1]                         // B line (2nd line)
+// Treble key signature placement using staff steps (most robust).
+// Step 0 = bottom line, step 8 = top line.
+// Sharps (F C G D A E B) standard treble steps:
+// F#: 8 (top line), C#: 5 (3rd space), G#: 2 (2nd line), D#: 6 (4th line),
+// A#: 3 (2nd space), E#: 7 (top space), B#: 4 (middle line)
+const TREBLE_SHARP_STEPS = {
+    'F': 8,
+    'C': 5,
+    // Style tweak: render G# one octave higher (7 staff-steps) to match your reference look.
+    'G': 9,
+    'D': 6,
+    'A': 3,
+    'E': 7,
+    'B': 4
 };
 
-const TREBLE_FLAT_POSITIONS = {
-    'B': STAFF_LINES[1],                        // B line (2nd line)
-    'E': STAFF_LINES[1] + STAFF_SPACING * 0.5,  // E space (2nd space)
-    'A': STAFF_LINES[2],                        // A line (3rd line)
-    'D': STAFF_LINES[2] + STAFF_SPACING * 0.5,  // D space (3rd space)
-    'G': STAFF_LINES[3],                        // G line (4th line)
-    'C': STAFF_LINES[3] + STAFF_SPACING * 0.5,  // C space (4th space)
-    'F': STAFF_LINES[4] + STAFF_SPACING * 0.5   // F space (5th space)
+// Flats (B E A D G C F) standard treble steps:
+// Bb: 4 (middle line), Eb: 7 (top space), Ab: 3 (2nd space), Db: 6 (4th line),
+// Gb: 2 (2nd line), Cb: 5 (3rd space), Fb: 8 (top line)
+const TREBLE_FLAT_STEPS = {
+    'B': 4,
+    'E': 7,
+    'A': 3,
+    'D': 6,
+    'G': 2,
+    'C': 5,
+    'F': 8
 };
 
 // Staff positions for sharps and flats in bass clef.
@@ -200,9 +215,12 @@ function drawKeySignature() {
         return;
     }
     
-    const positions = currentClef === 'bass' 
+    const positions = currentClef === 'bass'
         ? (keySig.type === 'sharp' ? BASS_SHARP_POSITIONS : BASS_FLAT_POSITIONS)
-        : (keySig.type === 'sharp' ? TREBLE_SHARP_POSITIONS : TREBLE_FLAT_POSITIONS);
+        : null;
+    const trebleSteps = currentClef === 'treble'
+        ? (keySig.type === 'sharp' ? TREBLE_SHARP_STEPS : TREBLE_FLAT_STEPS)
+        : null;
     
     // Start position after clef (clef is ~80px wide, start at 140px)
     let xPosition = 140;
@@ -210,22 +228,34 @@ function drawKeySignature() {
     
     ctx.font = '32px serif';
     ctx.fillStyle = '#333';
+    // Make placement consistent on lines/spaces by centering glyphs vertically.
+    ctx.textBaseline = 'middle';
+    ctx.textAlign = 'left';
     
     keySig.accidentals.forEach((note, index) => {
-        let yPosition = positions[note];
+        let yPosition = null;
 
-        // For bass clef, we store pitches like "F3" and map them
+        if (currentClef === 'treble') {
+            const step = trebleSteps?.[note];
+            if (typeof step === 'number') {
+                yPosition = staffStepToY(step);
+            }
+        } else {
+            yPosition = positions?.[note];
+        }
+
+        // For treble/bass clef, we may store pitches like "F5" and map them
         // through the existing note-position logic.
-        if (currentClef === 'bass' && typeof yPosition === 'string') {
+        if (typeof yPosition === 'string') {
             const letter = yPosition.slice(0, -1);
             const octave = yPosition.slice(-1);
             yPosition = getNoteYPosition(letter, octave);
         }
         if (yPosition !== undefined) {
             if (keySig.type === 'sharp') {
-                ctx.fillText('♯', xPosition, yPosition + 10);
+                ctx.fillText('♯', xPosition, yPosition);
             } else {
-                ctx.fillText('♭', xPosition, yPosition + 10);
+                ctx.fillText('♭', xPosition, yPosition);
             }
             xPosition += spacing;
         }
@@ -246,11 +276,14 @@ function drawStaff() {
     });
     
     // Draw clef symbol (bigger and based on current clef)
-    ctx.font = '100px serif';
+    // Treble clef is typically taller; also center it vertically on the staff.
+    ctx.font = currentClef === 'treble' ? '125px serif' : '110px serif';
     ctx.fillStyle = '#333';
     const clefSymbol = currentClef === 'bass' ? '𝄢' : '𝄞';
-    // Position clef to align nicely with staff
-    const clefY = currentClef === 'bass' ? STAFF_LINES[2] + 30 : STAFF_LINES[0] + 30;
+    // Position clef to align nicely with staff (baseline-tuned by eye)
+    const clefY = currentClef === 'bass'
+        ? (STAFF_LINES[2] + 35)
+        : (STAFF_LINES[2] + 45);
     ctx.fillText(clefSymbol, 50, clefY);
     
     // Draw key signature after clef
