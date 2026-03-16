@@ -6,10 +6,11 @@
 
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    /* Match the soft, cozy music-tool color scheme from the app pages */
+    background: radial-gradient(circle at top left, #fdf9f2 0%, #f4f0e8 45%, #e8e0d4 75%, #ddd4c6 100%);
     min-height: 100vh;
     padding: 20px;
-    color: #333;
+    color: #3b3b3b;
 }
 
 .container {
@@ -21,7 +22,7 @@ body {
 header {
     text-align: center;
     margin-bottom: 60px;
-    color: white;
+    color: #554839;
 }
 
 header h1 {
@@ -33,8 +34,8 @@ header h1 {
 
 .subtitle {
     font-size: 1.3em;
-    opacity: 0.95;
-    text-shadow: 1px 1px 4px rgba(0, 0, 0, 0.2);
+    opacity: 0.9;
+    color: #6b7d5a;
 }
 
 .apps-grid {
@@ -46,42 +47,101 @@ header h1 {
 }
 
 .app-card {
-    background: white;
-    border-radius: 20px;
-    padding: 40px 30px;
+    /* App icon style card (like a home-screen app) */
+    background: radial-gradient(circle at top, #ffffff 0%, #faf8f4 40%, #f1ece3 100%);
+    border-radius: 26px;
+    padding: 34px 26px 30px;
     text-decoration: none;
     color: inherit;
-    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 16px 40px rgba(71, 53, 32, 0.18);
     transition: all 0.3s ease;
     display: flex;
     flex-direction: column;
     align-items: center;
     text-align: center;
-    border: 2px solid transparent;
+    border: 2px solid rgba(217, 205, 184, 0.7);
+    position: relative;
+    overflow: hidden;
 }
 
 .app-card:hover {
-    transform: translateY(-10px);
-    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-    border-color: rgba(102, 126, 234, 0.5);
+    transform: translateY(-8px) scale(1.01);
+    box-shadow: 0 22px 60px rgba(71, 53, 32, 0.25);
+    border-color: rgba(122, 144, 112, 0.9);
 }
 
 .app-icon {
-    font-size: 4em;
-    margin-bottom: 20px;
-    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.1));
+    font-size: 3.6em;
+    margin-bottom: 18px;
+    z-index: 1;
+}
+
+/* Cute illustrated background behind each app icon */
+.app-artwork {
+    position: relative;
+    width: 120px;
+    height: 120px;
+    border-radius: 28px;
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: radial-gradient(circle at 20% 0%, #ffe8a3 0%, #ffd1c0 30%, #f4c7ff 60%, #c7e6ff 100%);
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.18);
+    overflow: hidden;
+}
+
+.app-artwork::before,
+.app-artwork::after {
+    content: "";
+    position: absolute;
+    border-radius: 999px;
+    opacity: 0.25;
+}
+
+.app-artwork::before {
+    width: 160%;
+    height: 55%;
+    background: radial-gradient(circle at 0% 0%, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0));
+    top: -15%;
+    left: -10%;
+}
+
+.app-artwork::after {
+    width: 75%;
+    height: 75%;
+    background: radial-gradient(circle at 100% 100%, rgba(107, 125, 90, 0.45), rgba(107, 125, 90, 0));
+    bottom: -15%;
+    right: -10%;
+}
+
+/* Variant art per app for a more “illustrated” feel */
+.app-card.piano-app .app-artwork {
+    background: radial-gradient(circle at top, #fef6e9 0%, #f7dfb9 40%, #f0c9a0 75%);
+}
+
+.app-card.piano-app .app-artwork::after {
+    background: radial-gradient(circle at 90% 90%, rgba(122, 144, 112, 0.6), rgba(122, 144, 112, 0));
+}
+
+.app-card.sheet-app .app-artwork {
+    background: radial-gradient(circle at top, #f7f3ff 0%, #d9d1ff 40%, #bfc7ff 80%);
+}
+
+.app-card.sheet-app .app-artwork::after {
+    background: radial-gradient(circle at 90% 90%, rgba(102, 126, 234, 0.7), rgba(102, 126, 234, 0));
 }
 
 .app-card h2 {
     font-size: 1.8em;
     margin-bottom: 15px;
-    color: #667eea;
+    color: #6b7d5a;
     font-weight: 600;
 }
 
 .app-card p {
     font-size: 1.1em;
-    color: #666;
+    color: #7b7366;
     line-height: 1.6;
 }
 
