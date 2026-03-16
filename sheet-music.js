@@ -9,8 +9,8 @@ const STAFF_SPACING = 20; // Space between staff lines
 const NOTE_WIDTH = 30;
 const NOTE_HEIGHT = 20;
 // Horizontal grid size for note columns (controls spacing between notes).
-// Larger value = notes further apart. Tuned to more traditional engraved spacing.
-const NOTE_COLUMN_WIDTH = 70;
+// Larger value = notes further apart. Slightly tightened to fit more notes while staying readable.
+const NOTE_COLUMN_WIDTH = 60;
 
 // Multi-staff layout
 let staffCount = 1;
