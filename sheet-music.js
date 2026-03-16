@@ -212,6 +212,9 @@ const SHARP_POSITIONS = {
 let notes = [];
 let noteHistory = [];
 
+// Edit mode state
+let isEditMode = false;
+
 // Store title
 let sheetTitle = '';
 
@@ -408,7 +411,18 @@ function drawNote(x, staffIndex, step, note, octave, duration, isSelected = fals
     // Draw stem if not whole note
     if (duration !== 'whole') {
         const stemLength = duration === 'half' ? 60 : 80;
-        const geom = getStemGeometry({ x, note, octave, duration }, stemLength);
+        // Pass full positioning info so stems are correctly placed and perfectly vertical
+        const geom = getStemGeometry(
+            {
+                x,
+                note,
+                octave,
+                duration,
+                step,
+                staffIndex
+            },
+            stemLength
+        );
         const stemX = geom.stemX;
         const stemStartY = geom.stemStartY;
         const stemEndY = geom.stemEndY;
@@ -431,10 +445,10 @@ function drawNote(x, staffIndex, step, note, octave, duration, isSelected = fals
     // Draw sharp/flat if needed
     if (note.includes('#')) {
         ctx.font = '24px serif';
-        ctx.fillText('♯', x - 25, noteY + 8);
+        ctx.fillText('♯', x - 32, noteY + 8);
     } else if (note.includes('b')) {
         ctx.font = '24px serif';
-        ctx.fillText('♭', x - 25, noteY + 8);
+        ctx.fillText('♭', x - 32, noteY + 8);
     }
     
     // Draw ledger lines if needed
@@ -898,6 +912,19 @@ function updateHoverFromEvent(e) {
         return;
     }
 
+    // In edit mode, we don't show a placement preview; instead, highlight
+    // the note under the cursor (if any) for a clear visual target.
+    if (isEditMode) {
+        hoveredPlacement = null;
+        const hit = hitTestNote(x, y);
+        const newSelectedId = hit ? hit.id : null;
+        if (newSelectedId !== selectedNoteId) {
+            selectedNoteId = newSelectedId;
+            redraw();
+        }
+        return;
+    }
+
     const lines = getStaffLines(staffIndex);
     const step = Math.round((lines[4] - y) / (STAFF_SPACING / 2));
     const snappedX = getSnappedXForCanvasX(x);
@@ -934,7 +961,7 @@ document.getElementById('duration-select').addEventListener('change', () => {
     redraw();
 });
 
-// Handle canvas click: select existing note, else place a new one
+// Handle canvas click: in normal mode, place a note; in edit mode, open edit popup for a clicked note
 canvas.addEventListener('click', (e) => {
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
@@ -942,14 +969,16 @@ canvas.addEventListener('click', (e) => {
     if (getStaffIndexFromY(y) === null) return;
 
     const hit = hitTestNote(x, y);
-    if (hit) {
-        selectedNoteId = hit.id;
-        redraw();
+    if (isEditMode) {
+        // In edit mode, only act when a note is clicked
+        if (hit) {
+            openNoteEditPopup(hit.id);
+        }
         return;
     }
 
-    // place new note at hovered position (if any)
-    if (hoveredPlacement) {
+    // Normal mode: place new note at hovered position (if any)
+    if (!hit && hoveredPlacement) {
         selectedNoteId = null;
         addNoteFromPlacement(hoveredPlacement);
     }
@@ -1060,10 +1089,90 @@ function deleteSelectedNote() {
     redraw();
 }
 
-document.getElementById('acc-sharp-btn').addEventListener('click', () => setSelectedAccidental('sharp'));
-document.getElementById('acc-flat-btn').addEventListener('click', () => setSelectedAccidental('flat'));
-document.getElementById('acc-natural-btn').addEventListener('click', () => setSelectedAccidental('natural'));
-document.getElementById('delete-note-btn').addEventListener('click', deleteSelectedNote);
+// Popup-based edit flow
+const editModeBtn = document.getElementById('edit-mode-btn');
+const noteEditOverlay = document.getElementById('note-edit-overlay');
+const popupSharpBtn = document.getElementById('popup-sharp-btn');
+const popupFlatBtn = document.getElementById('popup-flat-btn');
+const popupNaturalBtn = document.getElementById('popup-natural-btn');
+const popupDeleteBtn = document.getElementById('popup-delete-btn');
+const popupCancelBtn = document.getElementById('popup-cancel-btn');
+
+function updateEditModeButton() {
+    if (!editModeBtn) return;
+    if (isEditMode) {
+        editModeBtn.classList.add('btn-edit-active');
+        editModeBtn.textContent = 'Finish Editing';
+    } else {
+        editModeBtn.classList.remove('btn-edit-active');
+        editModeBtn.textContent = 'Edit Note';
+    }
+}
+
+function toggleEditMode() {
+    isEditMode = !isEditMode;
+    updateEditModeButton();
+}
+
+function openNoteEditPopup(noteId) {
+    selectedNoteId = noteId;
+    if (!noteEditOverlay) return;
+    noteEditOverlay.classList.remove('hidden');
+    noteEditOverlay.setAttribute('aria-hidden', 'false');
+}
+
+function closeNoteEditPopup() {
+    if (!noteEditOverlay) return;
+    noteEditOverlay.classList.add('hidden');
+    noteEditOverlay.setAttribute('aria-hidden', 'true');
+}
+
+if (editModeBtn) {
+    editModeBtn.addEventListener('click', toggleEditMode);
+}
+
+if (popupSharpBtn) {
+    popupSharpBtn.addEventListener('click', () => {
+        setSelectedAccidental('sharp');
+        closeNoteEditPopup();
+    });
+}
+
+if (popupFlatBtn) {
+    popupFlatBtn.addEventListener('click', () => {
+        setSelectedAccidental('flat');
+        closeNoteEditPopup();
+    });
+}
+
+if (popupNaturalBtn) {
+    popupNaturalBtn.addEventListener('click', () => {
+        setSelectedAccidental('natural');
+        closeNoteEditPopup();
+    });
+}
+
+if (popupDeleteBtn) {
+    popupDeleteBtn.addEventListener('click', () => {
+        deleteSelectedNote();
+        closeNoteEditPopup();
+    });
+}
+
+if (popupCancelBtn) {
+    popupCancelBtn.addEventListener('click', () => {
+        closeNoteEditPopup();
+    });
+}
+
+// Close popup when clicking on the shaded backdrop (but not the dialog)
+if (noteEditOverlay) {
+    noteEditOverlay.addEventListener('click', (event) => {
+        if (event.target === noteEditOverlay) {
+            closeNoteEditPopup();
+        }
+    });
+}
 
 function addLine() {
     staffCount += 1;

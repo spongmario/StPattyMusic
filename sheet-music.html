@@ -44,11 +44,9 @@
             </div>
             
             <div class="toolbar-section">
-                <label>Edit note:</label>
-                <button id="acc-sharp-btn" class="btn btn-secondary" type="button" title="Set selected note to sharp (♯)">♯</button>
-                <button id="acc-flat-btn" class="btn btn-secondary" type="button" title="Set selected note to flat (♭)">♭</button>
-                <button id="acc-natural-btn" class="btn btn-secondary" type="button" title="Set selected note to natural (♮)">♮</button>
-                <button id="delete-note-btn" class="btn btn-secondary" type="button" title="Delete selected note">Delete</button>
+                <button id="edit-mode-btn" class="btn btn-secondary" type="button" title="Click, then click a note to edit it">
+                    Edit Note
+                </button>
             </div>
             
             <div class="toolbar-section">
@@ -75,8 +73,22 @@
             <canvas id="sheet-music-canvas"></canvas>
         </div>
         
+        <div id="note-edit-overlay" class="note-edit-overlay hidden" aria-hidden="true">
+            <div class="note-edit-dialog" role="dialog" aria-modal="true" aria-labelledby="note-edit-title">
+                <h2 id="note-edit-title">Edit Note</h2>
+                <p class="note-edit-subtitle">Choose how you want to change this note:</p>
+                <div class="note-edit-actions">
+                    <button id="popup-sharp-btn" class="btn btn-secondary" type="button">♯ Sharp</button>
+                    <button id="popup-natural-btn" class="btn btn-secondary" type="button">♮ Natural</button>
+                    <button id="popup-flat-btn" class="btn btn-secondary" type="button">♭ Flat</button>
+                    <button id="popup-delete-btn" class="btn btn-secondary btn-danger" type="button">Delete Note</button>
+                </div>
+                <button id="popup-cancel-btn" class="btn btn-light" type="button">Cancel</button>
+            </div>
+        </div>
+        
         <div class="instructions">
-            <p><strong>Instructions:</strong> Hover over the staff to preview placement, then click to place a note. Notes automatically use the key signature (sharps/flats). Use the Duration dropdown to choose note type. Click an existing note to select it, then set ♯/♭/♮ or delete.</p>
+            <p><strong>Instructions:</strong> Hover over the staff to preview placement, then click to place a note. Notes automatically use the key signature (sharps/flats). Use the Duration dropdown to choose note type. To edit a note, click <strong>Edit note</strong>, then click the note you want to change and choose ♯/♮/♭ or delete from the popup.</p>
         </div>
     </div>
     

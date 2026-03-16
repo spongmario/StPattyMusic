@@ -137,6 +137,76 @@ h1 {
     background: #faf8f4;
 }
 
+.btn-light {
+    background: #e4e0d6;
+    color: #333;
+}
+
+.btn-light:hover {
+    background: #d7d1c4;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(130, 120, 100, 0.3);
+}
+
+.btn-danger {
+    background: #c75050;
+}
+
+.btn-danger:hover {
+    background: #b24545;
+}
+
+.btn-edit-active {
+    background: #c75050;
+    box-shadow: 0 0 0 2px rgba(255, 255, 255, 0.7), 0 0 0 4px rgba(199, 80, 80, 0.7);
+    transform: translateY(-1px);
+}
+
+.note-edit-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.note-edit-dialog {
+    background: #faf8f4;
+    border-radius: 16px;
+    padding: 24px 28px;
+    box-shadow: 0 18px 45px rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(122, 144, 112, 0.4);
+    max-width: 360px;
+    width: 100%;
+    text-align: center;
+}
+
+.note-edit-dialog h2 {
+    margin-bottom: 8px;
+    font-size: 20px;
+    color: #333;
+}
+
+.note-edit-subtitle {
+    margin-bottom: 18px;
+    font-size: 14px;
+    color: #666;
+}
+
+.note-edit-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+    margin-bottom: 16px;
+}
+
+.hidden {
+    display: none;
+}
+
 .instructions {
     background: #faf8f4;
     border-radius: 15px;
