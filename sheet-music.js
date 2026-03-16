@@ -8,6 +8,9 @@ const STAFF_TOP = 160; // top of first staff system (increased to give more spac
 const STAFF_SPACING = 20; // Space between staff lines
 const NOTE_WIDTH = 30;
 const NOTE_HEIGHT = 20;
+// Horizontal grid size for note columns (controls spacing between notes).
+// Larger value = notes further apart. Tuned to more traditional engraved spacing.
+const NOTE_COLUMN_WIDTH = 70;
 
 // Multi-staff layout
 let staffCount = 1;
@@ -506,8 +509,10 @@ function computeBeamGroups(notesIn) {
         }
         const prev = current[current.length - 1];
         const dx = Math.abs(n.x - prev.x);
-        // Treat adjacent snapped columns (50px grid) as beam neighbors.
-        if (dx <= 60) {
+        // Treat adjacent snapped columns as beam neighbors.
+        // Threshold slightly under 2 columns so beams still connect nicely
+        // even if spacing changes.
+        if (dx <= NOTE_COLUMN_WIDTH * 1.5) {
             current.push(n);
         } else {
             if (current.length >= 2) groups.push(current);
@@ -755,7 +760,7 @@ function addNoteFromPlacement(placement) {
     const minX = getKeySignatureWidth();
     
     // Snap to grid (every 50 pixels)
-    const snappedX = Math.round(placement.x / 50) * 50;
+    const snappedX = Math.round(placement.x / NOTE_COLUMN_WIDTH) * NOTE_COLUMN_WIDTH;
     const snappedXClamped = Math.max(minX, Math.min(STAFF_WIDTH - 100, snappedX));
 
     const step = placement.step;
@@ -870,7 +875,7 @@ function applyKeySignatureAccidental(letter) {
 
 function getSnappedXForCanvasX(x) {
     const minX = getKeySignatureWidth();
-    const snappedX = Math.round(x / 50) * 50;
+    const snappedX = Math.round(x / NOTE_COLUMN_WIDTH) * NOTE_COLUMN_WIDTH;
     return Math.max(minX, Math.min(STAFF_WIDTH - 100, snappedX));
 }
 
