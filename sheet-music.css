@@ -42,7 +42,11 @@ h1 {
     text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
 }
 
+/* Toolbar sticks only after you scroll it to the top — header scrolls away to maximize staff space */
 .toolbar {
+    position: sticky;
+    top: 0;
+    z-index: 100;
     background: #faf8f4;
     border-radius: 15px;
     padding: 20px;
