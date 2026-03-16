@@ -3,21 +3,43 @@ const canvas = document.getElementById('sheet-music-canvas');
 const ctx = canvas.getContext('2d');
 
 // Canvas dimensions
-const STAFF_HEIGHT = 400;
 const STAFF_WIDTH = 1200;
-const STAFF_TOP = 100;
+const STAFF_TOP = 100; // top of first staff system
 const STAFF_SPACING = 20; // Space between staff lines
 const NOTE_WIDTH = 30;
 const NOTE_HEIGHT = 20;
 
-// Staff line positions (5 lines per staff)
-const STAFF_LINES = [0, 1, 2, 3, 4].map(i => STAFF_TOP + i * STAFF_SPACING);
+// Multi-staff layout
+let staffCount = 1;
+const SYSTEM_SPACING = 220; // vertical distance between staff systems (top-to-top)
+
+function getStaffTop(staffIndex) {
+    return STAFF_TOP + staffIndex * SYSTEM_SPACING;
+}
+
+function getStaffLines(staffIndex) {
+    const top = getStaffTop(staffIndex);
+    return [0, 1, 2, 3, 4].map(i => top + i * STAFF_SPACING);
+}
+
+// Base staff line positions for the first staff system.
+// These are used by the legacy pitch->Y lookup tables below.
+const STAFF_LINES = getStaffLines(0);
+
+function resizeCanvas() {
+    canvas.width = STAFF_WIDTH;
+    const lastTop = getStaffTop(staffCount - 1);
+    const bottomOfLastStaff = lastTop + STAFF_SPACING * 4;
+    // Extra padding for ledger lines + hover
+    canvas.height = Math.max(400, bottomOfLastStaff + 140);
+}
 
 // Convert a staff "step" to a canvas Y coordinate.
 // Define step 0 as the BOTTOM line of the staff, and each line/space is +1 step.
 // So: bottom line = 0, space above = 1, next line = 2, ... top line = 8.
-function staffStepToY(step) {
-    return STAFF_LINES[4] - step * (STAFF_SPACING / 2);
+function staffStepToY(step, staffIndex) {
+    const lines = getStaffLines(staffIndex);
+    return lines[4] - step * (STAFF_SPACING / 2);
 }
 
 // Current clef (default: bass)
@@ -191,13 +213,12 @@ let notes = [];
 let noteHistory = [];
 
 // Hover preview + selection state
-let hoveredPlacement = null; // { x, step, y, note, octave, duration }
+let hoveredPlacement = null; // { x, staffIndex, step, y, note, octave, duration }
 let selectedNoteId = null;
 let nextNoteId = 1;
 
-// Set canvas size
-canvas.width = STAFF_WIDTH;
-canvas.height = STAFF_HEIGHT;
+// Set initial canvas size
+resizeCanvas();
 
 // Get note key (e.g., "C4", "C#4")
 function getNoteKey(note, octave) {
@@ -206,15 +227,54 @@ function getNoteKey(note, octave) {
 
 // Get Y position for a note based on current clef
 function getNoteYPosition(note, octave) {
-    // Handle sharps/flats by using the base note
+    // Legacy helper kept for key signature mapping; for notes we prefer step-based Y.
+    // Handle sharps/flats by using the base note.
     const baseNote = note.replace('#', '').replace('b', '');
     const noteKey = getNoteKey(baseNote, octave);
     const positions = currentClef === 'bass' ? BASS_NOTE_POSITIONS : TREBLE_NOTE_POSITIONS;
-    return positions[noteKey] || STAFF_LINES[2];
+    // Fallback to a "middle-ish" position on the *first* staff.
+    const staffLines0 = getStaffLines(0);
+    return positions[noteKey] || staffLines0[2];
+}
+
+function pitchToStaffStep(letter, octave, clef) {
+    const letters = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+    const startOctave = clef === 'bass' ? 1 : 2;
+    const startLetterIndex = letters.indexOf('G'); // step 0 is bottom line which is G
+
+    const targetLetterIndex = letters.indexOf(letter);
+    const targetOctave = Number(octave);
+    if (targetLetterIndex === -1 || Number.isNaN(targetOctave)) return null;
+
+    // Brute-force search a reasonable step range to find the matching pitch.
+    // This keeps behavior consistent with staffStepToPitch().
+    for (let step = -40; step <= 60; step++) {
+        // replicate staffStepToPitch logic, but parameterized
+        let o = startOctave;
+        if (step >= 0) {
+            for (let i = 0; i < step; i++) {
+                const from = letters[(startLetterIndex + i) % 7];
+                const to = letters[(startLetterIndex + i + 1) % 7];
+                if (from === 'B' && to === 'C') o++;
+            }
+        } else {
+            for (let i = 0; i > step; i--) {
+                const from = letters[((startLetterIndex + i) % 7 + 7) % 7];
+                const to = letters[((startLetterIndex + i - 1) % 7 + 7) % 7];
+                if (from === 'C' && to === 'B') o--;
+            }
+        }
+
+        const idx = startLetterIndex + step;
+        const l = letters[((idx % 7) + 7) % 7];
+        if (l === letter && o === targetOctave) return step;
+    }
+
+    return null;
 }
 
 // Draw key signature
-function drawKeySignature() {
+function drawKeySignature(staffIndex) {
     const keySig = KEY_SIGNATURES[currentKey];
     if (!keySig || keySig.type === 'none' || keySig.accidentals.length === 0) {
         return;
@@ -246,7 +306,7 @@ function drawKeySignature() {
         if (currentClef === 'treble') {
             const step = trebleSteps?.[note];
             if (typeof step === 'number') {
-                yPosition = staffStepToY(step);
+                yPosition = staffStepToY(step, staffIndex);
             }
         } else {
             yPosition = positions?.[note];
@@ -257,7 +317,12 @@ function drawKeySignature() {
         if (typeof yPosition === 'string') {
             const letter = yPosition.slice(0, -1);
             const octave = yPosition.slice(-1);
-            yPosition = getNoteYPosition(letter, octave);
+            const step = pitchToStaffStep(letter, octave, 'bass');
+            if (typeof step === 'number') {
+                yPosition = staffStepToY(step, staffIndex);
+            } else {
+                yPosition = null;
+            }
         }
         if (yPosition !== undefined) {
             if (keySig.type === 'sharp') {
@@ -273,7 +338,8 @@ function drawKeySignature() {
 }
 
 // Draw staff lines
-function drawStaff() {
+function drawStaff(staffIndex) {
+    const STAFF_LINES = getStaffLines(staffIndex);
     ctx.strokeStyle = '#333';
     ctx.lineWidth = 2;
     
@@ -302,13 +368,14 @@ function drawStaff() {
     ctx.restore();
     
     // Draw key signature after clef
-    drawKeySignature();
+    drawKeySignature(staffIndex);
 }
 
 // Draw a note
-function drawNote(x, y, note, octave, duration, isSelected = false, isPreview = false) {
+function drawNote(x, staffIndex, step, note, octave, duration, isSelected = false, isPreview = false) {
     const noteKey = getNoteKey(note, octave);
-    const noteY = getNoteYPosition(note, octave);
+    const STAFF_LINES = getStaffLines(staffIndex);
+    const noteY = staffStepToY(step, staffIndex);
     
     // Draw note head
     ctx.fillStyle = isSelected ? '#1f5fbf' : '#000';
@@ -386,7 +453,8 @@ function drawNote(x, y, note, octave, duration, isSelected = false, isPreview = 
 }
 
 function getStemGeometry(note, stemLengthOverride = null) {
-    const noteY = getNoteYPosition(note.note, note.octave);
+    const STAFF_LINES = getStaffLines(note.staffIndex ?? 0);
+    const noteY = staffStepToY(note.step, note.staffIndex ?? 0);
     const duration = note.duration;
     const stemLength = stemLengthOverride ?? (duration === 'half' ? 60 : 80);
 
@@ -441,8 +509,10 @@ function drawBeams(groups) {
     ctx.fillStyle = '#000';
 
     for (const group of groups) {
+        const staffIndex = group[0]?.staffIndex ?? 0;
+        const STAFF_LINES = getStaffLines(staffIndex);
         // Choose a single stem direction for the group based on average note position
-        const avgY = group.reduce((sum, n) => sum + getNoteYPosition(n.note, n.octave), 0) / group.length;
+        const avgY = group.reduce((sum, n) => sum + staffStepToY(n.step, n.staffIndex ?? staffIndex), 0) / group.length;
         const direction = avgY < STAFF_LINES[2] ? 'down' : 'up';
 
         const stemGeoms = group.map(n => {
@@ -543,15 +613,22 @@ function drawFlagsForUnbeamedNotes(notesIn, beamedNoteIds) {
 // Redraw everything
 function redraw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
-    drawStaff();
+    for (let i = 0; i < staffCount; i++) {
+        drawStaff(i);
+    }
     
     // Draw all notes
     notes.forEach(note => {
-        drawNote(note.x, note.y, note.note, note.octave, note.duration, note.id === selectedNoteId);
+        drawNote(note.x, note.staffIndex ?? 0, note.step, note.note, note.octave, note.duration, note.id === selectedNoteId);
     });
 
     // Beam runs of adjacent 8th/16th notes (and draw flags for remaining unbeamed notes)
-    const groups = computeBeamGroups(notes);
+    // Only compute beams within the same staff system
+    const groups = [];
+    for (let i = 0; i < staffCount; i++) {
+        const inStaff = notes.filter(n => (n.staffIndex ?? 0) === i);
+        groups.push(...computeBeamGroups(inStaff));
+    }
     const beamedIds = new Set();
     for (const g of groups) for (const n of g) beamedIds.add(n.id);
     drawBeams(groups);
@@ -563,7 +640,8 @@ function redraw() {
         ctx.globalAlpha = 0.35;
         drawNote(
             hoveredPlacement.x,
-            hoveredPlacement.y,
+            hoveredPlacement.staffIndex,
+            hoveredPlacement.step,
             hoveredPlacement.note,
             hoveredPlacement.octave,
             hoveredPlacement.duration,
@@ -607,8 +685,9 @@ function addNoteFromPlacement(placement) {
     notes.push({
         id: String(nextNoteId++),
         x: snappedXClamped,
+        staffIndex: placement.staffIndex ?? 0,
         step,
-        y: staffStepToY(step),
+        y: staffStepToY(step, placement.staffIndex ?? 0),
         note,
         octave: pitch.octave,
         duration: duration
@@ -651,11 +730,19 @@ function undo() {
 }
 
 function yToNearestStaffStep(y) {
-    return Math.round((STAFF_LINES[4] - y) / (STAFF_SPACING / 2));
+    // Default to first staff; prefer using getStaffIndexFromY() and staffStepToY() for accuracy.
+    const lines0 = getStaffLines(0);
+    return Math.round((lines0[4] - y) / (STAFF_SPACING / 2));
 }
 
-function isWithinStaffBand(y) {
-    return y >= STAFF_TOP - 80 && y <= STAFF_TOP + STAFF_SPACING * 4 + 80;
+function getStaffIndexFromY(y) {
+    for (let i = 0; i < staffCount; i++) {
+        const top = getStaffTop(i);
+        const minY = top - 80;
+        const maxY = top + STAFF_SPACING * 4 + 80;
+        if (y >= minY && y <= maxY) return i;
+    }
+    return null;
 }
 
 function staffStepToPitch(step) {
@@ -706,17 +793,21 @@ function getSnappedXForCanvasX(x) {
 }
 
 function hitTestNote(canvasX, canvasY) {
+    const staffIndex = getStaffIndexFromY(canvasY);
+    if (staffIndex === null) return null;
     const snappedX = getSnappedXForCanvasX(canvasX);
-    const step = yToNearestStaffStep(canvasY);
-    const y = staffStepToY(step);
+    const lines = getStaffLines(staffIndex);
+    const step = Math.round((lines[4] - canvasY) / (STAFF_SPACING / 2));
+    const y = staffStepToY(step, staffIndex);
     // Find the closest note at this snapped column + step
     const thresholdX = NOTE_WIDTH;
     const thresholdY = NOTE_HEIGHT;
     let best = null;
     let bestScore = Infinity;
     for (const n of notes) {
+        if ((n.staffIndex ?? 0) !== staffIndex) continue;
         const dx = Math.abs(n.x - snappedX);
-        const dy = Math.abs(getNoteYPosition(n.note, n.octave) - y);
+        const dy = Math.abs(staffStepToY(n.step, n.staffIndex ?? 0) - y);
         if (dx <= thresholdX && dy <= thresholdY) {
             const score = dx + dy;
             if (score < bestScore) {
@@ -732,13 +823,15 @@ function updateHoverFromEvent(e) {
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    if (!isWithinStaffBand(y)) {
+    const staffIndex = getStaffIndexFromY(y);
+    if (staffIndex === null) {
         hoveredPlacement = null;
         redraw();
         return;
     }
 
-    const step = yToNearestStaffStep(y);
+    const lines = getStaffLines(staffIndex);
+    const step = Math.round((lines[4] - y) / (STAFF_SPACING / 2));
     const snappedX = getSnappedXForCanvasX(x);
     const pitch = staffStepToPitch(step);
     if (!pitch) {
@@ -750,8 +843,9 @@ function updateHoverFromEvent(e) {
     const duration = document.getElementById('duration-select').value;
     hoveredPlacement = {
         x: snappedX,
+        staffIndex,
         step,
-        y: staffStepToY(step),
+        y: staffStepToY(step, staffIndex),
         note: applyKeySignatureAccidental(pitch.letter),
         octave: pitch.octave,
         duration
@@ -777,7 +871,7 @@ canvas.addEventListener('click', (e) => {
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    if (!isWithinStaffBand(y)) return;
+    if (getStaffIndexFromY(y) === null) return;
 
     const hit = hitTestNote(x, y);
     if (hit) {
@@ -854,6 +948,15 @@ document.getElementById('acc-sharp-btn').addEventListener('click', () => setSele
 document.getElementById('acc-flat-btn').addEventListener('click', () => setSelectedAccidental('flat'));
 document.getElementById('acc-natural-btn').addEventListener('click', () => setSelectedAccidental('natural'));
 document.getElementById('delete-note-btn').addEventListener('click', deleteSelectedNote);
+
+function addLine() {
+    staffCount += 1;
+    resizeCanvas();
+    hoveredPlacement = null;
+    redraw();
+}
+
+document.getElementById('add-line-btn').addEventListener('click', addLine);
 
 // Initialize history so undo works from first action
 pushHistory();
