@@ -445,13 +445,60 @@ function drawNote(x, staffIndex, step, note, octave, duration, isSelected = fals
         }
     }
     
-    // Draw sharp/flat if needed
-    if (note.includes('#')) {
+    // Draw accidental if needed.
+    // Prefer an explicit accidental set via the Edit Note popup so that
+    // naturals (♮) can be shown even when the stored pitch is the plain letter.
+    let explicitAccidental = null;
+    if (typeof arguments[5] === 'string' && arguments.length >= 7 && typeof arguments[6] === 'boolean') {
+        // no-op: keep signature the same; actual accidental info lives on
+        // the note object when redraw() calls drawNote for real notes.
+    }
+
+    // When called from redraw(), the "note" argument is just the letter (e.g. 'C', 'C#').
+    // The full note object (with any explicitAccidental) is available in that path,
+    // so we inspect the currently-selected note (if any) to decide whether to show ♮.
+    // To keep this simple and robust, we attach an `explicitAccidental` field to each
+    // note in setSelectedAccidental(), and then read it here when present.
+    let accidentalToDraw = null;
+
+    // If the caller provided a full note object (as in redraw()), prefer its explicitAccidental.
+    if (typeof x === 'number' && typeof staffIndex === 'number' && typeof step === 'number') {
+        // Try to find the underlying note object in the notes array.
+        const underlying = notes.find(n =>
+            n.x === x &&
+            (n.staffIndex ?? 0) === staffIndex &&
+            n.step === step &&
+            n.note === note &&
+            n.octave === octave &&
+            n.duration === duration
+        );
+        if (underlying && underlying.explicitAccidental) {
+            explicitAccidental = underlying.explicitAccidental;
+        }
+    }
+
+    if (explicitAccidental === 'sharp') {
+        accidentalToDraw = 'sharp';
+    } else if (explicitAccidental === 'flat') {
+        accidentalToDraw = 'flat';
+    } else if (explicitAccidental === 'natural') {
+        accidentalToDraw = 'natural';
+    } else {
+        // Fallback: infer from the note name if no explicit override exists.
+        if (note.includes('#')) accidentalToDraw = 'sharp';
+        else if (note.includes('b')) accidentalToDraw = 'flat';
+    }
+
+    if (accidentalToDraw) {
         ctx.font = '24px serif';
-        ctx.fillText('♯', x - 32, noteY + 8);
-    } else if (note.includes('b')) {
-        ctx.font = '24px serif';
-        ctx.fillText('♭', x - 32, noteY + 8);
+        const accidentalOffsetX = 36; // small extra spacing so accidentals aren't squished against the note head
+        if (accidentalToDraw === 'sharp') {
+            ctx.fillText('♯', x - accidentalOffsetX, noteY + 8);
+        } else if (accidentalToDraw === 'flat') {
+            ctx.fillText('♭', x - accidentalOffsetX, noteY + 8);
+        } else if (accidentalToDraw === 'natural') {
+            ctx.fillText('♮', x - accidentalOffsetX, noteY + 8);
+        }
     }
     
     // Draw ledger lines if needed
@@ -1077,9 +1124,16 @@ function setSelectedAccidental(kind) {
     const n = getSelectedNote();
     if (!n) return;
     const base = n.note.replace('#', '').replace('b', '');
-    if (kind === 'sharp') n.note = `${base}#`;
-    if (kind === 'flat') n.note = `${base}b`;
-    if (kind === 'natural') n.note = base;
+    if (kind === 'sharp') {
+        n.note = `${base}#`;
+        n.explicitAccidental = 'sharp';
+    } else if (kind === 'flat') {
+        n.note = `${base}b`;
+        n.explicitAccidental = 'flat';
+    } else if (kind === 'natural') {
+        n.note = base;
+        n.explicitAccidental = 'natural';
+    }
     pushHistory();
     redraw();
 }
