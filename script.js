@@ -61,23 +61,110 @@ function playNote(note, octave) {
     const baseFreq = noteFrequencies[note] || 440;
     const frequency = baseFreq * Math.pow(2, octave - 4);
     
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-    
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-    
-    oscillator.frequency.value = frequency;
-    oscillator.type = 'sine';
-    
-    // Envelope for piano-like sound
     const now = audioContext.currentTime;
-    gainNode.gain.setValueAtTime(0, now);
-    gainNode.gain.linearRampToValueAtTime(0.3, now + 0.01);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, now + 0.5);
+    const duration = 2.0; // Longer duration for realistic piano decay
     
-    oscillator.start(now);
-    oscillator.stop(now + 0.5);
+    // Create master gain and low-pass filter for warmth
+    const masterGain = audioContext.createGain();
+    const lowPass = audioContext.createBiquadFilter();
+    lowPass.type = 'lowpass';
+    lowPass.frequency.value = 8000; // Cut off high frequencies for warmth
+    lowPass.Q.value = 1;
+    
+    lowPass.connect(masterGain);
+    masterGain.connect(audioContext.destination);
+    
+    // Add hammer strike noise (brief burst of filtered noise)
+    const noiseBuffer = audioContext.createBuffer(1, audioContext.sampleRate * 0.01, audioContext.sampleRate);
+    const noiseData = noiseBuffer.getChannelData(0);
+    for (let i = 0; i < noiseData.length; i++) {
+        noiseData[i] = Math.random() * 2 - 1;
+    }
+    const noiseSource = audioContext.createBufferSource();
+    const noiseGain = audioContext.createGain();
+    const noiseFilter = audioContext.createBiquadFilter();
+    noiseFilter.type = 'bandpass';
+    noiseFilter.frequency.value = frequency * 3; // Center around higher harmonics
+    noiseFilter.Q.value = 2;
+    
+    noiseSource.buffer = noiseBuffer;
+    noiseSource.connect(noiseFilter);
+    noiseFilter.connect(noiseGain);
+    noiseGain.connect(lowPass);
+    
+    // Quick noise burst envelope
+    noiseGain.gain.setValueAtTime(0.15, now);
+    noiseGain.gain.exponentialRampToValueAtTime(0.001, now + 0.01);
+    noiseSource.start(now);
+    noiseSource.stop(now + 0.01);
+    
+    // Realistic piano harmonic series with proper amplitudes
+    // Based on actual piano string physics
+    const harmonics = [
+        { freq: 1.0, gain: 1.0, detune: 0 },      // Fundamental
+        { freq: 2.0, gain: 0.6, detune: 0.002 },  // Octave
+        { freq: 3.0, gain: 0.4, detune: 0.003 },  // Perfect fifth
+        { freq: 4.0, gain: 0.25, detune: 0.004 }, // Two octaves
+        { freq: 5.0, gain: 0.15, detune: 0.005 }, // Major third
+        { freq: 6.0, gain: 0.1, detune: 0.006 },  // Perfect fifth + octave
+        { freq: 7.0, gain: 0.08, detune: 0.007 }, // Seventh harmonic
+        { freq: 8.0, gain: 0.05, detune: 0.008 }  // Three octaves
+    ];
+    
+    // Create oscillators for each harmonic
+    harmonics.forEach((harmonic, index) => {
+        const osc = audioContext.createOscillator();
+        const gainNode = audioContext.createGain();
+        const harmonicFilter = audioContext.createBiquadFilter();
+        
+        // Use sawtooth for richer harmonics, but filter it
+        osc.type = 'sawtooth';
+        osc.frequency.value = frequency * harmonic.freq * (1 + harmonic.detune);
+        
+        // Filter each harmonic differently for realism
+        harmonicFilter.type = 'lowpass';
+        harmonicFilter.frequency.value = frequency * harmonic.freq * 1.5;
+        harmonicFilter.Q.value = 0.7;
+        
+        osc.connect(harmonicFilter);
+        harmonicFilter.connect(gainNode);
+        gainNode.connect(lowPass);
+        
+        // Realistic piano envelope per harmonic
+        // Higher harmonics decay faster
+        const attackTime = 0.002 + (index * 0.0005); // Slightly staggered attack
+        const decayTime = 0.05 + (index * 0.01);     // Higher harmonics decay faster
+        const sustainLevel = 0.4 - (index * 0.03);   // Lower sustain for higher harmonics
+        const releaseStart = 0.2;
+        const releaseTime = duration - releaseStart;
+        
+        gainNode.gain.setValueAtTime(0, now);
+        gainNode.gain.linearRampToValueAtTime(harmonic.gain, now + attackTime);
+        gainNode.gain.exponentialRampToValueAtTime(
+            harmonic.gain * sustainLevel, 
+            now + attackTime + decayTime
+        );
+        gainNode.gain.setValueAtTime(
+            harmonic.gain * sustainLevel * 0.7, 
+            now + releaseStart
+        );
+        gainNode.gain.exponentialRampToValueAtTime(0.001, now + duration);
+        
+        osc.start(now);
+        osc.stop(now + duration);
+    });
+    
+    // Master envelope with realistic piano dynamics
+    masterGain.gain.setValueAtTime(0, now);
+    masterGain.gain.linearRampToValueAtTime(0.5, now + 0.003);
+    masterGain.gain.exponentialRampToValueAtTime(0.3, now + 0.05);
+    masterGain.gain.exponentialRampToValueAtTime(0.2, now + 0.2);
+    masterGain.gain.exponentialRampToValueAtTime(0.001, now + duration);
+    
+    // Dynamic filter sweep (brightness decreases over time)
+    lowPass.frequency.setValueAtTime(12000, now);
+    lowPass.frequency.exponentialRampToValueAtTime(4000, now + 0.1);
+    lowPass.frequency.exponentialRampToValueAtTime(2000, now + duration);
 }
 
 // Create piano keys
