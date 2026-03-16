@@ -16,6 +16,82 @@ const STAFF_LINES = [0, 1, 2, 3, 4].map(i => STAFF_TOP + i * STAFF_SPACING);
 // Current clef (default: bass)
 let currentClef = 'bass';
 
+// Current key signature (default: C)
+let currentKey = 'C';
+
+// Key signature definitions
+// Order of sharps: F, C, G, D, A, E, B
+// Order of flats: B, E, A, D, G, C, F
+const KEY_SIGNATURES = {
+    'C': { type: 'none', accidentals: [] },
+    'G': { type: 'sharp', accidentals: ['F'] },
+    'D': { type: 'sharp', accidentals: ['F', 'C'] },
+    'A': { type: 'sharp', accidentals: ['F', 'C', 'G'] },
+    'E': { type: 'sharp', accidentals: ['F', 'C', 'G', 'D'] },
+    'B': { type: 'sharp', accidentals: ['F', 'C', 'G', 'D', 'A'] },
+    'F#': { type: 'sharp', accidentals: ['F', 'C', 'G', 'D', 'A', 'E'] },
+    'C#': { type: 'sharp', accidentals: ['F', 'C', 'G', 'D', 'A', 'E', 'B'] },
+    'F': { type: 'flat', accidentals: ['B'] },
+    'Bb': { type: 'flat', accidentals: ['B', 'E'] },
+    'Eb': { type: 'flat', accidentals: ['B', 'E', 'A'] },
+    'Ab': { type: 'flat', accidentals: ['B', 'E', 'A', 'D'] },
+    'Db': { type: 'flat', accidentals: ['B', 'E', 'A', 'D', 'G'] },
+    'Gb': { type: 'flat', accidentals: ['B', 'E', 'A', 'D', 'G', 'C'] },
+    'Cb': { type: 'flat', accidentals: ['B', 'E', 'A', 'D', 'G', 'C', 'F'] }
+};
+
+// Staff positions for sharps and flats in treble clef
+const TREBLE_SHARP_POSITIONS = {
+    'F': STAFF_LINES[4],                        // F line (5th line)
+    'C': STAFF_LINES[3] + STAFF_SPACING * 0.5,  // C space (4th space)
+    'G': STAFF_LINES[3],                        // G line (4th line)
+    'D': STAFF_LINES[2] + STAFF_SPACING * 0.5,  // D space (3rd space)
+    'A': STAFF_LINES[2],                        // A line (3rd line)
+    'E': STAFF_LINES[1] + STAFF_SPACING * 0.5,  // E space (2nd space)
+    'B': STAFF_LINES[1]                         // B line (2nd line)
+};
+
+const TREBLE_FLAT_POSITIONS = {
+    'B': STAFF_LINES[1],                        // B line (2nd line)
+    'E': STAFF_LINES[1] + STAFF_SPACING * 0.5,  // E space (2nd space)
+    'A': STAFF_LINES[2],                        // A line (3rd line)
+    'D': STAFF_LINES[2] + STAFF_SPACING * 0.5,  // D space (3rd space)
+    'G': STAFF_LINES[3],                        // G line (4th line)
+    'C': STAFF_LINES[3] + STAFF_SPACING * 0.5,  // C space (4th space)
+    'F': STAFF_LINES[4] + STAFF_SPACING * 0.5   // F space (5th space)
+};
+
+// Staff positions for sharps and flats in bass clef.
+// Here we specify the actual pitch (note+octave) for each accidental,
+// then reuse the existing BASS_NOTE_POSITIONS mapping so the glyphs
+// sit exactly where that pitch would be on the staff.
+// Lines (bottom to top): G2, B2, D3, F3, A3
+// Spaces: A2, C3, E3, G3
+const BASS_SHARP_POSITIONS = {
+    // Sharps in order: F, C, G, D, A, E, B
+    // Use octave 2 so the accidentals sit on the main staff
+    'F': 'F2',
+    'C': 'C2',
+    'G': 'G2',
+    'D': 'D2',
+    'A': 'A2',
+    'E': 'E2',
+    'B': 'B2'
+};
+
+const BASS_FLAT_POSITIONS = {
+    // Flats in order: B, E, A, D, G, C, F
+    // Use a mix of octave 1/2 so the pattern matches standard bass-clef engraving
+    // *within this app’s staff coordinate system* (which is effectively 1 octave lower).
+    'B': 'B1',
+    'E': 'E2',
+    'A': 'A1',
+    'D': 'D2',
+    'G': 'G1',
+    'C': 'C2',
+    'F': 'F1'
+};
+
 // Note positions for Treble Clef
 // In treble clef, E4 is on the first line, G4 is on the second line
 const TREBLE_NOTE_POSITIONS = {
@@ -117,6 +193,45 @@ function getNoteYPosition(note, octave) {
     return positions[noteKey] || STAFF_LINES[2];
 }
 
+// Draw key signature
+function drawKeySignature() {
+    const keySig = KEY_SIGNATURES[currentKey];
+    if (!keySig || keySig.type === 'none' || keySig.accidentals.length === 0) {
+        return;
+    }
+    
+    const positions = currentClef === 'bass' 
+        ? (keySig.type === 'sharp' ? BASS_SHARP_POSITIONS : BASS_FLAT_POSITIONS)
+        : (keySig.type === 'sharp' ? TREBLE_SHARP_POSITIONS : TREBLE_FLAT_POSITIONS);
+    
+    // Start position after clef (clef is ~80px wide, start at 140px)
+    let xPosition = 140;
+    const spacing = 25; // Space between accidentals
+    
+    ctx.font = '32px serif';
+    ctx.fillStyle = '#333';
+    
+    keySig.accidentals.forEach((note, index) => {
+        let yPosition = positions[note];
+
+        // For bass clef, we store pitches like "F3" and map them
+        // through the existing note-position logic.
+        if (currentClef === 'bass' && typeof yPosition === 'string') {
+            const letter = yPosition.slice(0, -1);
+            const octave = yPosition.slice(-1);
+            yPosition = getNoteYPosition(letter, octave);
+        }
+        if (yPosition !== undefined) {
+            if (keySig.type === 'sharp') {
+                ctx.fillText('♯', xPosition, yPosition + 10);
+            } else {
+                ctx.fillText('♭', xPosition, yPosition + 10);
+            }
+            xPosition += spacing;
+        }
+    });
+}
+
 // Draw staff lines
 function drawStaff() {
     ctx.strokeStyle = '#333';
@@ -137,6 +252,9 @@ function drawStaff() {
     // Position clef to align nicely with staff
     const clefY = currentClef === 'bass' ? STAFF_LINES[2] + 30 : STAFF_LINES[0] + 30;
     ctx.fillText(clefSymbol, 50, clefY);
+    
+    // Draw key signature after clef
+    drawKeySignature();
 }
 
 // Draw a note
@@ -219,6 +337,16 @@ function redraw() {
     });
 }
 
+// Get key signature width (for note placement)
+function getKeySignatureWidth() {
+    const keySig = KEY_SIGNATURES[currentKey];
+    if (!keySig || keySig.type === 'none' || keySig.accidentals.length === 0) {
+        return 0;
+    }
+    // Clef width (~80px) + spacing (20px) + accidentals (25px each) + padding
+    return 140 + (keySig.accidentals.length * 25) + 20;
+}
+
 // Add note at position
 function addNote(x, y) {
     const noteSelect = document.getElementById('note-select');
@@ -229,9 +357,12 @@ function addNote(x, y) {
     const octave = octaveSelect.value;
     const duration = durationSelect.value;
     
+    // Get minimum X position (after key signature)
+    const minX = getKeySignatureWidth();
+    
     // Snap to grid (every 50 pixels)
     const snappedX = Math.round(x / 50) * 50;
-    const snappedXClamped = Math.max(100, Math.min(STAFF_WIDTH - 100, snappedX));
+    const snappedXClamped = Math.max(minX, Math.min(STAFF_WIDTH - 100, snappedX));
     
     notes.push({
         x: snappedXClamped,
@@ -310,10 +441,18 @@ function changeClef() {
     redraw();
 }
 
+// Handle key signature change
+function changeKey() {
+    const keySelect = document.getElementById('key-select');
+    currentKey = keySelect.value;
+    redraw();
+}
+
 // Handle toolbar buttons
 document.getElementById('clear-btn').addEventListener('click', clearAll);
 document.getElementById('undo-btn').addEventListener('click', undo);
 document.getElementById('clef-select').addEventListener('change', changeClef);
+document.getElementById('key-select').addEventListener('change', changeKey);
 
 // Initialize octave selector for default bass clef
 changeClef();
