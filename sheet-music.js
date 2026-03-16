@@ -215,6 +215,9 @@ function drawKeySignature() {
         return;
     }
     
+    // Prevent text settings (baseline/align/font) from leaking into other drawing operations (e.g. clef).
+    ctx.save();
+    
     const positions = currentClef === 'bass'
         ? (keySig.type === 'sharp' ? BASS_SHARP_POSITIONS : BASS_FLAT_POSITIONS)
         : null;
@@ -260,6 +263,8 @@ function drawKeySignature() {
             xPosition += spacing;
         }
     });
+    
+    ctx.restore();
 }
 
 // Draw staff lines
@@ -277,14 +282,19 @@ function drawStaff() {
     
     // Draw clef symbol (bigger and based on current clef)
     // Treble clef is typically taller; also center it vertically on the staff.
+    ctx.save();
     ctx.font = currentClef === 'treble' ? '125px serif' : '110px serif';
     ctx.fillStyle = '#333';
+    // Ensure consistent positioning regardless of what other functions set.
+    ctx.textBaseline = 'alphabetic';
+    ctx.textAlign = 'left';
     const clefSymbol = currentClef === 'bass' ? '𝄢' : '𝄞';
     // Position clef to align nicely with staff (baseline-tuned by eye)
     const clefY = currentClef === 'bass'
         ? (STAFF_LINES[2] + 35)
         : (STAFF_LINES[2] + 45);
     ctx.fillText(clefSymbol, 50, clefY);
+    ctx.restore();
     
     // Draw key signature after clef
     drawKeySignature();
