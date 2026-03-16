@@ -6,7 +6,7 @@
 
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
-    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    background: linear-gradient(135deg, #f4f0e8 0%, #e8e0d4 50%, #ddd4c6 100%);
     min-height: 100vh;
     padding: 20px;
     color: #333;
@@ -26,16 +26,17 @@ h1 {
 }
 
 .key-selector-section {
-    background: white;
+    background: #faf8f4;
     border-radius: 15px;
     padding: 25px;
     margin-bottom: 30px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(122, 144, 112, 0.25);
 }
 
 .key-selector-section h2 {
     margin-bottom: 20px;
-    color: #667eea;
+    color: #6b7d5a;
     text-align: center;
 }
 
@@ -68,9 +69,9 @@ h1 {
 .key-btn {
     padding: 10px 20px;
     font-size: 14px;
-    border: 2px solid #667eea;
+    border: 2px solid #7a9070;
     background: white;
-    color: #667eea;
+    color: #6b7d5a;
     border-radius: 8px;
     cursor: pointer;
     transition: all 0.3s ease;
@@ -78,30 +79,31 @@ h1 {
 }
 
 .key-btn:hover {
-    background: #667eea;
+    background: #7a9070;
     color: white;
     transform: translateY(-2px);
-    box-shadow: 0 4px 8px rgba(102, 126, 234, 0.3);
+    box-shadow: 0 4px 8px rgba(122, 144, 112, 0.3);
 }
 
 .key-btn.active {
-    background: #667eea;
+    background: #7a9070;
     color: white;
-    box-shadow: 0 4px 12px rgba(102, 126, 234, 0.5);
+    box-shadow: 0 4px 12px rgba(122, 144, 112, 0.5);
 }
 
 .selected-key-display {
     margin-top: 25px;
     padding: 20px;
-    background: #f8f9fa;
+    background: #f5f2ec;
     border-radius: 10px;
     text-align: center;
+    border: 1px solid rgba(122, 144, 112, 0.25);
 }
 
 #selected-key-text {
     font-size: 1.5em;
     font-weight: bold;
-    color: #667eea;
+    color: #6b7d5a;
     margin-bottom: 10px;
 }
 
@@ -111,11 +113,12 @@ h1 {
 }
 
 .piano-container {
-    background: white;
+    background: #faf8f4;
     border-radius: 15px;
     padding: 30px;
     box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
     overflow-x: auto;
+    border: 1px solid rgba(122, 144, 112, 0.25);
 }
 
 .piano {
@@ -156,12 +159,12 @@ h1 {
 }
 
 .white-key.in-key {
-    background: #b3d9ff;
-    border-color: #667eea;
+    background: #e0ead8;
+    border-color: #7a9070;
 }
 
 .white-key.in-key.active {
-    background: #80c5ff;
+    background: #d0ddc4;
 }
 
 .black-key {
@@ -186,12 +189,12 @@ h1 {
 }
 
 .black-key.in-key {
-    background: #4a90e2;
-    box-shadow: 0 3px 8px rgba(74, 144, 226, 0.6);
+    background: #6b7d5a;
+    box-shadow: 0 3px 8px rgba(107, 125, 90, 0.6);
 }
 
 .black-key.in-key.active {
-    background: #357abd;
+    background: #5d6d4d;
 }
 
 .key-label {
