@@ -16,6 +16,10 @@ const NOTE_COLUMN_WIDTH = 70;
 let staffCount = 1;
 const SYSTEM_SPACING = 220; // vertical distance between staff systems (top-to-top)
 
+// Lyrics edit mode (similar to note edit mode)
+let isLyricsEditMode = false;
+let activeLyricsNoteId = null;
+
 function getStaffTop(staffIndex) {
     return STAFF_TOP + staffIndex * SYSTEM_SPACING;
 }
@@ -378,6 +382,41 @@ function drawStaff(staffIndex) {
     
     // Draw key signature after clef
     drawKeySignature(staffIndex);
+}
+
+// Draw the horizontal guideline where lyrics will sit under this staff
+function drawLyricsLine(staffIndex) {
+    const STAFF_LINES = getStaffLines(staffIndex);
+    // Place lyrics close under the staff, visually "next to" the first line of notes
+    const baselineY = STAFF_LINES[4] + STAFF_SPACING * 1.2;
+    ctx.save();
+    ctx.strokeStyle = '#bbb';
+    ctx.lineWidth = 1;
+    ctx.setLineDash([4, 4]);
+    ctx.beginPath();
+    ctx.moveTo(50, baselineY);
+    ctx.lineTo(STAFF_WIDTH - 50, baselineY);
+    ctx.stroke();
+    ctx.restore();
+}
+
+// Draw lyrics text attached to notes on a given staff
+function drawLyricsForStaff(staffIndex) {
+    const STAFF_LINES = getStaffLines(staffIndex);
+    const baselineY = STAFF_LINES[4] + STAFF_SPACING * 1.2;
+    ctx.save();
+    ctx.font = '16px "Segoe UI", system-ui, sans-serif';
+    ctx.fillStyle = '#333';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+
+    notes
+        .filter(n => (n.staffIndex ?? 0) === staffIndex && n.lyric && n.lyric.trim() !== '')
+        .forEach(n => {
+            ctx.fillText(n.lyric, n.x, baselineY);
+        });
+
+    ctx.restore();
 }
 
 // Draw a note
@@ -749,12 +788,18 @@ function redraw() {
     
     for (let i = 0; i < staffCount; i++) {
         drawStaff(i);
+        drawLyricsLine(i);
     }
     
     // Draw all notes
     notes.forEach(note => {
         drawNote(note.x, note.staffIndex ?? 0, note.step, note.note, note.octave, note.duration, note.id === selectedNoteId);
     });
+
+    // Draw lyrics text after notes so they sit cleanly under the staff
+    for (let i = 0; i < staffCount; i++) {
+        drawLyricsForStaff(i);
+    }
 
     // Beam runs of adjacent 8th/16th notes (and draw flags for remaining unbeamed notes)
     // Only compute beams within the same staff system
@@ -920,6 +965,62 @@ function applyKeySignatureAccidental(letter) {
     return letter;
 }
 
+function handleLyricsClick(canvasX, staffIndex) {
+    const snappedX = getSnappedXForCanvasX(canvasX);
+    // Find the nearest note in this staff by X so the lyric attaches to a note
+    let bestNote = null;
+    let bestDx = Infinity;
+    for (const n of notes) {
+        if ((n.staffIndex ?? 0) !== staffIndex) continue;
+        const dx = Math.abs(n.x - snappedX);
+        if (dx < bestDx) {
+            bestDx = dx;
+            bestNote = n;
+        }
+    }
+
+    // Require a reasonably close note so lyrics stay aligned with notes
+    if (!bestNote || bestDx > NOTE_COLUMN_WIDTH * 0.8) {
+        return;
+    }
+
+    openLyricsTooltip(bestNote);
+}
+
+function openLyricsTooltip(note) {
+    if (!lyricsTooltip || !lyricsInput) return;
+    activeLyricsNoteId = note.id;
+
+    // Position tooltip near the note in page coordinates
+    const rect = canvas.getBoundingClientRect();
+    const staffLines = getStaffLines(note.staffIndex ?? 0);
+    const baselineY = staffLines[4] + STAFF_SPACING * 1.0;
+    const canvasY = baselineY;
+
+    const pageX = rect.left + note.x;
+    const pageY = rect.top + canvasY;
+
+    lyricsTooltip.style.left = `${pageX + 8}px`;
+    lyricsTooltip.style.top = `${pageY - 10}px`;
+
+    lyricsInput.value = note.lyric || '';
+    lyricsTooltip.classList.remove('hidden');
+    lyricsTooltip.setAttribute('aria-hidden', 'false');
+
+    // Focus after next paint so position is applied
+    setTimeout(() => {
+        lyricsInput.focus();
+        lyricsInput.select();
+    }, 0);
+}
+
+function closeLyricsTooltip() {
+    if (!lyricsTooltip) return;
+    lyricsTooltip.classList.add('hidden');
+    lyricsTooltip.setAttribute('aria-hidden', 'true');
+    activeLyricsNoteId = null;
+}
+
 function getSnappedXForCanvasX(x) {
     const minX = getKeySignatureWidth();
     const snappedX = Math.round(x / NOTE_COLUMN_WIDTH) * NOTE_COLUMN_WIDTH;
@@ -964,9 +1065,9 @@ function updateHoverFromEvent(e) {
         return;
     }
 
-    // In edit mode, we don't show a placement preview; instead, highlight
+    // In edit modes, we don't show a placement preview; instead, highlight
     // the note under the cursor (if any) for a clear visual target.
-    if (isEditMode) {
+    if (isEditMode || isLyricsEditMode) {
         hoveredPlacement = null;
         const hit = hitTestNote(x, y);
         const newSelectedId = hit ? hit.id : null;
@@ -1018,7 +1119,8 @@ canvas.addEventListener('click', (e) => {
     const rect = canvas.getBoundingClientRect();
     const x = e.clientX - rect.left;
     const y = e.clientY - rect.top;
-    if (getStaffIndexFromY(y) === null) return;
+    const staffIndex = getStaffIndexFromY(y);
+    if (staffIndex === null) return;
 
     const hit = hitTestNote(x, y);
     if (isEditMode) {
@@ -1027,6 +1129,24 @@ canvas.addEventListener('click', (e) => {
             openNoteEditPopup(hit.id);
         }
         return;
+    }
+
+    // Lyrics edit mode: clicking on a note OR below the staff lets you attach/edit a lyric
+    if (isLyricsEditMode) {
+        const STAFF_LINES = getStaffLines(staffIndex);
+        const lyricsZoneStartY = STAFF_LINES[4] + STAFF_SPACING * 0.9;
+
+        // Click directly on a note: edit that note's lyric
+        if (hit) {
+            handleLyricsClick(hit.x, staffIndex);
+            return;
+        }
+
+        // Click under the staff: attach lyric to nearest note column in this staff
+        if (y >= lyricsZoneStartY) {
+            handleLyricsClick(x, staffIndex);
+            return;
+        }
     }
 
     // Normal mode: place new note at hovered position (if any)
@@ -1156,6 +1276,11 @@ const popupFlatBtn = document.getElementById('popup-flat-btn');
 const popupNaturalBtn = document.getElementById('popup-natural-btn');
 const popupDeleteBtn = document.getElementById('popup-delete-btn');
 const popupCancelBtn = document.getElementById('popup-cancel-btn');
+const toggleLyricsBtn = document.getElementById('toggle-lyrics-btn');
+const lyricsTooltip = document.getElementById('lyrics-tooltip');
+const lyricsInput = document.getElementById('lyrics-input');
+const lyricsSaveBtn = document.getElementById('lyrics-save-btn');
+const lyricsClearBtn = document.getElementById('lyrics-clear-btn');
 
 function updateEditModeButton() {
     if (!editModeBtn) return;
@@ -1166,6 +1291,24 @@ function updateEditModeButton() {
         editModeBtn.classList.remove('btn-edit-active');
         editModeBtn.textContent = 'Edit Note';
     }
+}
+
+function updateLyricsButton() {
+    if (!toggleLyricsBtn) return;
+    const anyLyrics = notes.some(n => n.lyric && n.lyric.trim() !== '');
+    if (isLyricsEditMode) {
+        toggleLyricsBtn.classList.add('btn-edit-active');
+        toggleLyricsBtn.textContent = anyLyrics ? 'Finish Editing Lyrics' : 'Finish Adding Lyrics';
+    } else {
+        toggleLyricsBtn.classList.remove('btn-edit-active');
+        toggleLyricsBtn.textContent = anyLyrics ? 'Edit Lyrics' : 'Add Lyrics';
+    }
+}
+
+function toggleLyricsMode() {
+    isLyricsEditMode = !isLyricsEditMode;
+    updateLyricsButton();
+    redraw();
 }
 
 function toggleEditMode() {
@@ -1189,6 +1332,60 @@ function closeNoteEditPopup() {
 if (editModeBtn) {
     editModeBtn.addEventListener('click', toggleEditMode);
 }
+
+if (toggleLyricsBtn) {
+    toggleLyricsBtn.addEventListener('click', toggleLyricsMode);
+    // Initialize label on load
+    updateLyricsButton();
+}
+
+if (lyricsSaveBtn && lyricsInput) {
+    lyricsSaveBtn.addEventListener('click', () => {
+        if (!activeLyricsNoteId) {
+            closeLyricsTooltip();
+            return;
+        }
+        const note = notes.find(n => n.id === activeLyricsNoteId);
+        if (!note) {
+            closeLyricsTooltip();
+            return;
+        }
+        const value = lyricsInput.value.trim();
+        if (value === '') {
+            delete note.lyric;
+        } else {
+            note.lyric = value;
+        }
+        pushHistory();
+        closeLyricsTooltip();
+        updateLyricsButton();
+        redraw();
+    });
+}
+
+if (lyricsClearBtn) {
+    lyricsClearBtn.addEventListener('click', () => {
+        if (!activeLyricsNoteId) {
+            closeLyricsTooltip();
+            return;
+        }
+        const note = notes.find(n => n.id === activeLyricsNoteId);
+        if (note && note.lyric) {
+            delete note.lyric;
+            pushHistory();
+            redraw();
+        }
+        closeLyricsTooltip();
+        updateLyricsButton();
+    });
+}
+
+// Close lyrics tooltip when clicking outside of it (but not when clicking inside)
+document.addEventListener('mousedown', (event) => {
+    if (!lyricsTooltip || lyricsTooltip.classList.contains('hidden')) return;
+    if (lyricsTooltip.contains(event.target)) return;
+    closeLyricsTooltip();
+});
 
 if (popupSharpBtn) {
     popupSharpBtn.addEventListener('click', () => {

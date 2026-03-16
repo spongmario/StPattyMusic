@@ -62,6 +62,7 @@
             
             <div class="toolbar-section toolbar-row-start">
                 <button id="add-title-btn" class="btn btn-secondary" type="button" title="Add or edit the title of the sheet music">Add Title</button>
+                <button id="toggle-lyrics-btn" class="btn btn-secondary" type="button" title="Click, then click under a note to add or edit lyrics for that note">Add Lyrics</button>
                 <button id="clear-btn" class="btn btn-secondary">Clear All</button>
                 <button id="undo-btn" class="btn btn-secondary">Undo</button>
                 <button id="add-line-btn" class="btn btn-secondary" type="button" title="Add another staff line (system) below">Add line</button>
@@ -84,6 +85,15 @@
                     <button id="popup-delete-btn" class="btn btn-secondary btn-danger" type="button">Delete Note</button>
                 </div>
                 <button id="popup-cancel-btn" class="btn btn-light" type="button">Cancel</button>
+            </div>
+        </div>
+
+        <!-- Lyrics edit tooltip (inline, near the note) -->
+        <div id="lyrics-tooltip" class="lyrics-tooltip hidden" aria-hidden="true">
+            <input id="lyrics-input" type="text" class="lyrics-input" placeholder="Enter lyric..." />
+            <div class="lyrics-tooltip-actions">
+                <button id="lyrics-save-btn" class="btn btn-secondary" type="button">Save</button>
+                <button id="lyrics-clear-btn" class="btn btn-light" type="button">Clear</button>
             </div>
         </div>
         
