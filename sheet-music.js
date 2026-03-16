@@ -338,9 +338,10 @@ function drawNote(x, y, note, octave, duration, isSelected = false, isPreview = 
     // Draw stem if not whole note
     if (duration !== 'whole') {
         const stemLength = duration === 'half' ? 60 : 80;
-        const stemX = x + NOTE_WIDTH / 2;
-        const stemStartY = noteY - (noteY > STAFF_LINES[2] ? 0 : stemLength);
-        const stemEndY = noteY - (noteY > STAFF_LINES[2] ? stemLength : 0);
+        const geom = getStemGeometry({ x, note, octave, duration }, stemLength);
+        const stemX = geom.stemX;
+        const stemStartY = geom.stemStartY;
+        const stemEndY = geom.stemEndY;
         
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 2;
@@ -349,20 +350,11 @@ function drawNote(x, y, note, octave, duration, isSelected = false, isPreview = 
         ctx.lineTo(stemX, stemEndY);
         ctx.stroke();
         
-        // Draw flag for eighth and sixteenth notes
-        if (duration === 'eighth' || duration === 'sixteenth') {
-            const flagY = stemStartY;
-            ctx.beginPath();
-            ctx.moveTo(stemX, flagY);
-            ctx.quadraticCurveTo(stemX + 10, flagY - 10, stemX + 15, flagY - 5);
-            ctx.stroke();
-            
-            if (duration === 'sixteenth') {
-                ctx.beginPath();
-                ctx.moveTo(stemX, flagY - 15);
-                ctx.quadraticCurveTo(stemX + 10, flagY - 25, stemX + 15, flagY - 20);
-                ctx.stroke();
-            }
+        // Flags are handled in a separate beaming pass for runs of 8th/16th notes.
+        // We only draw flags here when the note is not beamed.
+        if ((duration === 'eighth' || duration === 'sixteenth') && !isPreview) {
+            // If the note is part of a beam group, redraw() will skip flags via drawFlagsForUnbeamedNotes().
+            // (We keep this empty here to avoid double-drawing.)
         }
     }
     
@@ -393,6 +385,161 @@ function drawNote(x, y, note, octave, duration, isSelected = false, isPreview = 
     }
 }
 
+function getStemGeometry(note, stemLengthOverride = null) {
+    const noteY = getNoteYPosition(note.note, note.octave);
+    const duration = note.duration;
+    const stemLength = stemLengthOverride ?? (duration === 'half' ? 60 : 80);
+
+    // Consistent stem direction:
+    // - Notes above the middle line: stem down (left side)
+    // - Notes on/below middle line: stem up (right side)
+    const direction = noteY < STAFF_LINES[2] ? 'down' : 'up';
+    const stemX = direction === 'up' ? (note.x + NOTE_WIDTH / 2) : (note.x - NOTE_WIDTH / 2);
+    const stemStartY = noteY;
+    const stemEndY = direction === 'up' ? (noteY - stemLength) : (noteY + stemLength);
+    return { direction, stemX, stemStartY, stemEndY, noteY };
+}
+
+function isBeamableDuration(duration) {
+    return duration === 'eighth' || duration === 'sixteenth';
+}
+
+function computeBeamGroups(notesIn) {
+    const sorted = [...notesIn].sort((a, b) => a.x - b.x);
+    const groups = [];
+    let current = [];
+
+    for (const n of sorted) {
+        if (!isBeamableDuration(n.duration)) {
+            if (current.length >= 2) groups.push(current);
+            current = [];
+            continue;
+        }
+        if (current.length === 0) {
+            current.push(n);
+            continue;
+        }
+        const prev = current[current.length - 1];
+        const dx = Math.abs(n.x - prev.x);
+        // Treat adjacent snapped columns (50px grid) as beam neighbors.
+        if (dx <= 60) {
+            current.push(n);
+        } else {
+            if (current.length >= 2) groups.push(current);
+            current = [n];
+        }
+    }
+    if (current.length >= 2) groups.push(current);
+
+    return groups;
+}
+
+function drawBeams(groups) {
+    const BEAM_THICKNESS = 6;
+    const BEAM_GAP = 10; // distance between 1st and 2nd beam for sixteenths
+    ctx.save();
+    ctx.fillStyle = '#000';
+
+    for (const group of groups) {
+        // Choose a single stem direction for the group based on average note position
+        const avgY = group.reduce((sum, n) => sum + getNoteYPosition(n.note, n.octave), 0) / group.length;
+        const direction = avgY < STAFF_LINES[2] ? 'down' : 'up';
+
+        const stemGeoms = group.map(n => {
+            const geom = getStemGeometry(n);
+            // Force group direction so beams align
+            if (geom.direction !== direction) {
+                const stemLength = (n.duration === 'half' ? 60 : 80);
+                const noteY = geom.noteY;
+                const stemX = direction === 'up' ? (n.x + NOTE_WIDTH / 2) : (n.x - NOTE_WIDTH / 2);
+                const stemStartY = noteY;
+                const stemEndY = direction === 'up' ? (noteY - stemLength) : (noteY + stemLength);
+                return { ...geom, direction, stemX, stemStartY, stemEndY };
+            }
+            return geom;
+        });
+
+        // Flat beam line (no slope) at extremum of stem ends so it clears all notes
+        const beamY = direction === 'up'
+            ? Math.min(...stemGeoms.map(g => g.stemEndY))
+            : Math.max(...stemGeoms.map(g => g.stemEndY));
+
+        const firstX = stemGeoms[0].stemX;
+        const lastX = stemGeoms[stemGeoms.length - 1].stemX;
+
+        // Primary beam (8th+)
+        const yTop = direction === 'up' ? beamY : beamY;
+        const rectY = direction === 'up' ? (yTop) : (yTop);
+        ctx.fillRect(
+            Math.min(firstX, lastX),
+            direction === 'up' ? rectY : rectY,
+            Math.abs(lastX - firstX),
+            direction === 'up' ? BEAM_THICKNESS : BEAM_THICKNESS
+        );
+
+        // Draw stems to meet the beam
+        ctx.strokeStyle = '#000';
+        ctx.lineWidth = 2;
+        for (const g of stemGeoms) {
+            ctx.beginPath();
+            ctx.moveTo(g.stemX, g.stemStartY);
+            ctx.lineTo(g.stemX, beamY);
+            ctx.stroke();
+        }
+
+        // Secondary beams for sixteenths: only connect consecutive sixteenth notes
+        const hasSixteenth = group.some(n => n.duration === 'sixteenth');
+        if (hasSixteenth) {
+            for (let i = 0; i < group.length - 1; i++) {
+                const a = group[i];
+                const b = group[i + 1];
+                if (a.duration === 'sixteenth' && b.duration === 'sixteenth') {
+                    const ax = stemGeoms[i].stemX;
+                    const bx = stemGeoms[i + 1].stemX;
+                    const offset = direction === 'up' ? (BEAM_GAP + BEAM_THICKNESS) : -(BEAM_GAP + BEAM_THICKNESS);
+                    const y2 = beamY + offset;
+                    ctx.fillRect(
+                        Math.min(ax, bx),
+                        y2,
+                        Math.abs(bx - ax),
+                        BEAM_THICKNESS
+                    );
+                }
+            }
+        }
+    }
+
+    ctx.restore();
+}
+
+function drawFlagsForUnbeamedNotes(notesIn, beamedNoteIds) {
+    ctx.save();
+    ctx.strokeStyle = '#000';
+    ctx.lineWidth = 2;
+    for (const n of notesIn) {
+        if (!isBeamableDuration(n.duration)) continue;
+        if (beamedNoteIds.has(n.id)) continue;
+        const geom = getStemGeometry(n);
+        const stemX = geom.stemX;
+        const flagY = geom.direction === 'up' ? geom.stemEndY : geom.stemEndY;
+        const dir = geom.direction === 'up' ? 1 : -1;
+
+        // Simple flags (kept similar to prior look)
+        ctx.beginPath();
+        ctx.moveTo(stemX, flagY);
+        ctx.quadraticCurveTo(stemX + 12 * dir, flagY + 10 * dir, stemX + 16 * dir, flagY + 5 * dir);
+        ctx.stroke();
+
+        if (n.duration === 'sixteenth') {
+            ctx.beginPath();
+            ctx.moveTo(stemX, flagY + 12 * dir);
+            ctx.quadraticCurveTo(stemX + 12 * dir, flagY + 22 * dir, stemX + 16 * dir, flagY + 17 * dir);
+            ctx.stroke();
+        }
+    }
+    ctx.restore();
+}
+
 // Redraw everything
 function redraw() {
     ctx.clearRect(0, 0, canvas.width, canvas.height);
@@ -402,6 +549,13 @@ function redraw() {
     notes.forEach(note => {
         drawNote(note.x, note.y, note.note, note.octave, note.duration, note.id === selectedNoteId);
     });
+
+    // Beam runs of adjacent 8th/16th notes (and draw flags for remaining unbeamed notes)
+    const groups = computeBeamGroups(notes);
+    const beamedIds = new Set();
+    for (const g of groups) for (const n of g) beamedIds.add(n.id);
+    drawBeams(groups);
+    drawFlagsForUnbeamedNotes(notes, beamedIds);
 
     // Draw hover preview on top
     if (hoveredPlacement) {
