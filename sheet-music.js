@@ -13,41 +13,81 @@ const NOTE_HEIGHT = 20;
 // Staff line positions (5 lines per staff)
 const STAFF_LINES = [0, 1, 2, 3, 4].map(i => STAFF_TOP + i * STAFF_SPACING);
 
-// Note positions (MIDI note to staff position mapping)
-// C4 (middle C) is typically on the first ledger line below the staff
-const NOTE_POSITIONS = {
+// Current clef (default: bass)
+let currentClef = 'bass';
+
+// Note positions for Treble Clef
+// In treble clef, E4 is on the first line, G4 is on the second line
+const TREBLE_NOTE_POSITIONS = {
+    // Octave 2
+    'C2': STAFF_LINES[4] + STAFF_SPACING * 2,
+    'D2': STAFF_LINES[4] + STAFF_SPACING * 1.5,
+    'E2': STAFF_LINES[4] + STAFF_SPACING,
+    'F2': STAFF_LINES[4] + STAFF_SPACING * 0.5,
+    'G2': STAFF_LINES[4],
+    'A2': STAFF_LINES[3] + STAFF_SPACING * 0.5,
+    'B2': STAFF_LINES[3],
     // Octave 3
-    'C3': STAFF_LINES[4] + STAFF_SPACING * 2,
-    'D3': STAFF_LINES[4] + STAFF_SPACING * 1.5,
-    'E3': STAFF_LINES[4] + STAFF_SPACING,
-    'F3': STAFF_LINES[4] + STAFF_SPACING * 0.5,
-    'G3': STAFF_LINES[4],
-    'A3': STAFF_LINES[3] + STAFF_SPACING * 0.5,
-    'B3': STAFF_LINES[3],
-    // Octave 4
-    'C4': STAFF_LINES[2] + STAFF_SPACING * 0.5,
-    'D4': STAFF_LINES[2],
-    'E4': STAFF_LINES[1] + STAFF_SPACING * 0.5,
-    'F4': STAFF_LINES[1],
-    'G4': STAFF_LINES[0] + STAFF_SPACING * 0.5,
-    'A4': STAFF_LINES[0],
-    'B4': STAFF_LINES[0] - STAFF_SPACING * 0.5,
+    'C3': STAFF_LINES[2] + STAFF_SPACING * 0.5,
+    'D3': STAFF_LINES[2],
+    'E3': STAFF_LINES[1] + STAFF_SPACING * 0.5,
+    'F3': STAFF_LINES[1],
+    'G3': STAFF_LINES[0] + STAFF_SPACING * 0.5,
+    'A3': STAFF_LINES[0],
+    'B3': STAFF_LINES[0] - STAFF_SPACING * 0.5,
+    // Octave 4 (middle C and above)
+    'C4': STAFF_LINES[0] - STAFF_SPACING,
+    'D4': STAFF_LINES[0] - STAFF_SPACING * 1.5,
+    'E4': STAFF_LINES[0] - STAFF_SPACING * 2,
+    'F4': STAFF_LINES[0] - STAFF_SPACING * 2.5,
+    'G4': STAFF_LINES[0] - STAFF_SPACING * 3,
+    'A4': STAFF_LINES[0] - STAFF_SPACING * 3.5,
+    'B4': STAFF_LINES[0] - STAFF_SPACING * 4,
     // Octave 5
-    'C5': STAFF_LINES[0] - STAFF_SPACING,
-    'D5': STAFF_LINES[0] - STAFF_SPACING * 1.5,
-    'E5': STAFF_LINES[0] - STAFF_SPACING * 2,
-    'F5': STAFF_LINES[0] - STAFF_SPACING * 2.5,
-    'G5': STAFF_LINES[0] - STAFF_SPACING * 3,
-    'A5': STAFF_LINES[0] - STAFF_SPACING * 3.5,
-    'B5': STAFF_LINES[0] - STAFF_SPACING * 4,
-    // Octave 6
-    'C6': STAFF_LINES[0] - STAFF_SPACING * 4.5,
-    'D6': STAFF_LINES[0] - STAFF_SPACING * 5,
-    'E6': STAFF_LINES[0] - STAFF_SPACING * 5.5,
-    'F6': STAFF_LINES[0] - STAFF_SPACING * 6,
-    'G6': STAFF_LINES[0] - STAFF_SPACING * 6.5,
-    'A6': STAFF_LINES[0] - STAFF_SPACING * 7,
-    'B6': STAFF_LINES[0] - STAFF_SPACING * 7.5,
+    'C5': STAFF_LINES[0] - STAFF_SPACING * 4.5,
+    'D5': STAFF_LINES[0] - STAFF_SPACING * 5,
+    'E5': STAFF_LINES[0] - STAFF_SPACING * 5.5,
+    'F5': STAFF_LINES[0] - STAFF_SPACING * 6,
+    'G5': STAFF_LINES[0] - STAFF_SPACING * 6.5,
+    'A5': STAFF_LINES[0] - STAFF_SPACING * 7,
+    'B5': STAFF_LINES[0] - STAFF_SPACING * 7.5,
+};
+
+// Note positions for Bass Clef
+// In bass clef, G2 is on the first line, F3 is on the 4th line
+const BASS_NOTE_POSITIONS = {
+    // Octave 1
+    'C1': STAFF_LINES[4] + STAFF_SPACING * 2,
+    'D1': STAFF_LINES[4] + STAFF_SPACING * 1.5,
+    'E1': STAFF_LINES[4] + STAFF_SPACING,
+    'F1': STAFF_LINES[4] + STAFF_SPACING * 0.5,
+    'G1': STAFF_LINES[4],
+    'A1': STAFF_LINES[3] + STAFF_SPACING * 0.5,
+    'B1': STAFF_LINES[3],
+    // Octave 2
+    'C2': STAFF_LINES[2] + STAFF_SPACING * 0.5,
+    'D2': STAFF_LINES[2],
+    'E2': STAFF_LINES[1] + STAFF_SPACING * 0.5,
+    'F2': STAFF_LINES[1],
+    'G2': STAFF_LINES[0] + STAFF_SPACING * 0.5,
+    'A2': STAFF_LINES[0],
+    'B2': STAFF_LINES[0] - STAFF_SPACING * 0.5,
+    // Octave 3
+    'C3': STAFF_LINES[0] - STAFF_SPACING,
+    'D3': STAFF_LINES[0] - STAFF_SPACING * 1.5,
+    'E3': STAFF_LINES[0] - STAFF_SPACING * 2,
+    'F3': STAFF_LINES[0] - STAFF_SPACING * 2.5,
+    'G3': STAFF_LINES[0] - STAFF_SPACING * 3,
+    'A3': STAFF_LINES[0] - STAFF_SPACING * 3.5,
+    'B3': STAFF_LINES[0] - STAFF_SPACING * 4,
+    // Octave 4 (middle C and above)
+    'C4': STAFF_LINES[0] - STAFF_SPACING * 4.5,
+    'D4': STAFF_LINES[0] - STAFF_SPACING * 5,
+    'E4': STAFF_LINES[0] - STAFF_SPACING * 5.5,
+    'F4': STAFF_LINES[0] - STAFF_SPACING * 6,
+    'G4': STAFF_LINES[0] - STAFF_SPACING * 6.5,
+    'A4': STAFF_LINES[0] - STAFF_SPACING * 7,
+    'B4': STAFF_LINES[0] - STAFF_SPACING * 7.5,
 };
 
 // Sharps and flats
@@ -68,10 +108,13 @@ function getNoteKey(note, octave) {
     return note + octave;
 }
 
-// Get Y position for a note
+// Get Y position for a note based on current clef
 function getNoteYPosition(note, octave) {
-    const noteKey = getNoteKey(note, octave);
-    return NOTE_POSITIONS[noteKey] || STAFF_LINES[2];
+    // Handle sharps/flats by using the base note
+    const baseNote = note.replace('#', '').replace('b', '');
+    const noteKey = getNoteKey(baseNote, octave);
+    const positions = currentClef === 'bass' ? BASS_NOTE_POSITIONS : TREBLE_NOTE_POSITIONS;
+    return positions[noteKey] || STAFF_LINES[2];
 }
 
 // Draw staff lines
@@ -87,10 +130,13 @@ function drawStaff() {
         ctx.stroke();
     });
     
-    // Draw clef (treble clef symbol - simplified)
-    ctx.font = '60px serif';
+    // Draw clef symbol (bigger and based on current clef)
+    ctx.font = '100px serif';
     ctx.fillStyle = '#333';
-    ctx.fillText('𝄞', 60, STAFF_LINES[0] + 20);
+    const clefSymbol = currentClef === 'bass' ? '𝄢' : '𝄞';
+    // Position clef to align nicely with staff
+    const clefY = currentClef === 'bass' ? STAFF_LINES[2] + 30 : STAFF_LINES[0] + 30;
+    ctx.fillText(clefSymbol, 50, clefY);
 }
 
 // Draw a note
@@ -231,9 +277,46 @@ canvas.addEventListener('click', (e) => {
     }
 });
 
+// Handle clef change
+function changeClef() {
+    const clefSelect = document.getElementById('clef-select');
+    currentClef = clefSelect.value;
+    
+    // Update octave selector options based on clef
+    const octaveSelect = document.getElementById('octave-select');
+    octaveSelect.innerHTML = '';
+    
+    if (currentClef === 'bass') {
+        // Bass clef typically uses octaves 2-4
+        for (let i = 2; i <= 4; i++) {
+            const option = document.createElement('option');
+            option.value = i;
+            option.textContent = i;
+            if (i === 3) option.selected = true;
+            octaveSelect.appendChild(option);
+        }
+    } else {
+        // Treble clef typically uses octaves 3-5
+        for (let i = 3; i <= 5; i++) {
+            const option = document.createElement('option');
+            option.value = i;
+            option.textContent = i;
+            if (i === 4) option.selected = true;
+            octaveSelect.appendChild(option);
+        }
+    }
+    
+    // Redraw all notes with new positions
+    redraw();
+}
+
 // Handle toolbar buttons
 document.getElementById('clear-btn').addEventListener('click', clearAll);
 document.getElementById('undo-btn').addEventListener('click', undo);
+document.getElementById('clef-select').addEventListener('change', changeClef);
+
+// Initialize octave selector for default bass clef
+changeClef();
 
 // Initial draw
 redraw();
