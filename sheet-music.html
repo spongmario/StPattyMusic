@@ -63,7 +63,17 @@
             <div class="toolbar-section toolbar-row-start">
                 <button id="add-title-btn" class="btn btn-secondary" type="button" title="Add or edit the title of the sheet music">Add Title</button>
                 <button id="toggle-lyrics-btn" class="btn btn-secondary" type="button" title="Click, then click under a note to add or edit lyrics for that note">Add Lyrics</button>
-                <button id="clear-btn" class="btn btn-secondary">Clear All</button>
+                <button id="convert-flats-btn" class="btn btn-flats-convert" type="button" title="Convert sharp notes to flat equivalents (C#→Db, D#→Eb, G#→Ab, A#→Bb, E#→F, B#→C). F# is left as F#.">Convert to Flats</button>
+                <div class="clear-all-wrapper">
+                    <button id="clear-btn" class="btn btn-secondary" type="button" title="Clear all notes">Clear All</button>
+                    <div id="clear-confirm-tooltip" class="clear-confirm-tooltip hidden" aria-hidden="true">
+                        <p class="clear-confirm-text">Are you sure?</p>
+                        <div class="clear-confirm-actions">
+                            <button id="clear-confirm-yes" class="btn btn-secondary" type="button">Yes</button>
+                            <button id="clear-confirm-no" class="btn btn-light" type="button">No</button>
+                        </div>
+                    </div>
+                </div>
                 <button id="undo-btn" class="btn btn-secondary">Undo</button>
                 <button id="add-line-btn" class="btn btn-secondary" type="button" title="Add another staff line (system) below">Add line</button>
                 <button id="export-pdf-btn" class="btn btn-primary" type="button" title="Export the current sheet music to PDF">Export to PDF</button>

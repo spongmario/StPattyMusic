@@ -218,6 +218,8 @@ const SHARP_POSITIONS = {
 // Store notes
 let notes = [];
 let noteHistory = [];
+// Store original notes before flat conversion (for revert)
+let originalNotesBeforeConversion = null;
 
 // Edit mode state
 let isEditMode = false;
@@ -885,15 +887,25 @@ function pushHistory() {
     }
 }
 
-// Clear all notes
+// Clear all notes (called after user confirms in tooltip)
 function clearAll() {
-    if (confirm('Are you sure you want to clear all notes?')) {
-        notes = [];
-        noteHistory = [];
-        selectedNoteId = null;
-        hoveredPlacement = null;
-        redraw();
-    }
+    notes = [];
+    noteHistory = [];
+    selectedNoteId = null;
+    hoveredPlacement = null;
+    redraw();
+}
+
+function showClearConfirmTooltip() {
+    const tooltip = document.getElementById('clear-confirm-tooltip');
+    tooltip.classList.remove('hidden');
+    tooltip.setAttribute('aria-hidden', 'false');
+}
+
+function hideClearConfirmTooltip() {
+    const tooltip = document.getElementById('clear-confirm-tooltip');
+    tooltip.classList.add('hidden');
+    tooltip.setAttribute('aria-hidden', 'true');
 }
 
 // Undo last note
@@ -1182,7 +1194,21 @@ function changeKey() {
 }
 
 // Handle toolbar buttons
-document.getElementById('clear-btn').addEventListener('click', clearAll);
+document.getElementById('clear-btn').addEventListener('click', function () {
+    showClearConfirmTooltip();
+});
+document.getElementById('clear-confirm-yes').addEventListener('click', function () {
+    clearAll();
+    hideClearConfirmTooltip();
+});
+document.getElementById('clear-confirm-no').addEventListener('click', hideClearConfirmTooltip);
+document.addEventListener('click', function (e) {
+    const tooltip = document.getElementById('clear-confirm-tooltip');
+    const wrapper = document.querySelector('.clear-all-wrapper');
+    if (!tooltip.classList.contains('hidden') && wrapper && !wrapper.contains(e.target)) {
+        hideClearConfirmTooltip();
+    }
+});
 document.getElementById('undo-btn').addEventListener('click', undo);
 document.getElementById('clef-select').addEventListener('change', changeClef);
 document.getElementById('key-select').addEventListener('change', changeKey);
@@ -1450,6 +1476,100 @@ function addTitle() {
 }
 
 document.getElementById('add-title-btn').addEventListener('click', addTitle);
+
+// Convert sharp note names to flat enharmonic equivalents (e.g. C# -> Db).
+// Covers the spellings used in flat keys like Bb, Db, Eb, Ab.
+function convertToFlats() {
+    // Store original state before conversion
+    originalNotesBeforeConversion = JSON.parse(JSON.stringify(notes));
+
+    // Enharmonic: sharp name -> flat (or natural) name (F# is left as F#)
+    const sharpToFlat = {
+        'C#': 'Db',
+        'D#': 'Eb',
+        'E#': 'F',
+        'G#': 'Ab',
+        'A#': 'Bb',
+        'B#': 'C'
+    };
+
+    let converted = false;
+    notes.forEach(note => {
+        // Don't touch notes with an explicit natural accidental (they're not sharps)
+        if (note.explicitAccidental === 'natural') return;
+        const name = note.note;
+        if (!name || name.length < 2) return;
+        // Match sharp: either '#' (ASCII) or '♯' (Unicode)
+        const isSharp = name.charAt(1) === '#' || name.charAt(1) === '\u266F';
+        const key = name.charAt(0) + '#';
+        const flatName = isSharp ? sharpToFlat[key] : null;
+        if (flatName) {
+            note.note = flatName;
+            note.explicitAccidental = flatName.endsWith('b') ? 'flat' : 'natural';
+            // Move staff position up one step so the flat spelling is on the correct line/space
+            // (e.g. G# on G line → Ab on A space, not flat on G line which would look like Gb)
+            note.step = (note.step ?? 0) + 1;
+            // B# → C crosses the octave boundary
+            if (key === 'B#') {
+                note.octave = (note.octave ?? 2) + 1;
+            }
+            converted = true;
+        }
+    });
+
+    if (converted) {
+        pushHistory();
+        redraw();
+        updateFlatsButtonState();
+    } else {
+        alert('No sharps found to convert (C#, D#, E#, G#, A#, B#). F# is left as-is.');
+    }
+}
+
+// Revert to original notes before conversion
+function revertFlats() {
+    if (!originalNotesBeforeConversion) {
+        alert('No conversion to revert.');
+        return;
+    }
+
+    notes = JSON.parse(JSON.stringify(originalNotesBeforeConversion));
+    originalNotesBeforeConversion = null;
+    pushHistory();
+    redraw();
+    updateFlatsButtonState();
+}
+
+// Update the single Convert/Revert button label and color
+function updateFlatsButtonState() {
+    const btn = document.getElementById('convert-flats-btn');
+    if (!btn) return;
+    const isRevertState = originalNotesBeforeConversion !== null;
+    if (isRevertState) {
+        btn.textContent = 'Revert to Sharps';
+        btn.title = 'Revert to original sharp note spellings';
+        btn.classList.remove('btn-flats-convert');
+        btn.classList.add('btn-revert');
+    } else {
+        btn.textContent = 'Convert to Flats';
+        btn.title = 'Convert sharp notes to flat equivalents (C#→Db, D#→Eb, G#→Ab, A#→Bb, E#→F, B#→C). F# is left as F#.';
+        btn.classList.remove('btn-revert');
+        btn.classList.add('btn-flats-convert');
+    }
+}
+
+// Single button: Convert to Flats (green) or Revert to Sharps (blue)
+const convertFlatsBtn = document.getElementById('convert-flats-btn');
+if (convertFlatsBtn) {
+    convertFlatsBtn.addEventListener('click', () => {
+        if (originalNotesBeforeConversion !== null) {
+            revertFlats();
+        } else {
+            convertToFlats();
+        }
+    });
+    updateFlatsButtonState();
+}
 
 // Initialize history so undo works from first action
 pushHistory();
