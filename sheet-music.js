@@ -918,6 +918,54 @@ document.getElementById('undo-btn').addEventListener('click', undo);
 document.getElementById('clef-select').addEventListener('change', changeClef);
 document.getElementById('key-select').addEventListener('change', changeKey);
 
+function exportToPDF() {
+    // Render the canvas to an image and print it in a clean window.
+    // Users can choose "Save as PDF" in the print dialog.
+    const dataUrl = canvas.toDataURL('image/png', 1.0);
+
+    const w = window.open('', '_blank');
+    if (!w) {
+        alert('Popup blocked. Please allow popups to export to PDF.');
+        return;
+    }
+
+    w.document.open();
+    w.document.write(`<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Sheet Music Export</title>
+    <style>
+      @page { margin: 12mm; }
+      html, body { height: 100%; }
+      body { margin: 0; background: #fff; color: #000; }
+      .wrap { display: flex; justify-content: center; padding: 0; }
+      img { max-width: 100%; height: auto; }
+      @media print {
+        body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <img src="${dataUrl}" alt="Sheet Music" />
+    </div>
+    <script>
+      window.addEventListener('load', () => {
+        window.focus();
+        window.print();
+        // Close after print dialog (best-effort; some browsers ignore)
+        setTimeout(() => window.close(), 250);
+      });
+    </script>
+  </body>
+</html>`);
+    w.document.close();
+}
+
+document.getElementById('export-pdf-btn').addEventListener('click', exportToPDF);
+
 function getSelectedNote() {
     if (!selectedNoteId) return null;
     return notes.find(n => n.id === selectedNoteId) || null;
