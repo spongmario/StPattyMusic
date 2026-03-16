@@ -206,7 +206,7 @@ function drawKeySignature() {
     
     // Start position after clef (clef is ~80px wide, start at 140px)
     let xPosition = 140;
-    const spacing = 25; // Space between accidentals
+    const spacing = 18; // Space between accidentals (tighter like standard engraving)
     
     ctx.font = '32px serif';
     ctx.fillStyle = '#333';
@@ -343,8 +343,10 @@ function getKeySignatureWidth() {
     if (!keySig || keySig.type === 'none' || keySig.accidentals.length === 0) {
         return 0;
     }
-    // Clef width (~80px) + spacing (20px) + accidentals (25px each) + padding
-    return 140 + (keySig.accidentals.length * 25) + 20;
+    // Clef width (~80px) + spacing + accidentals + padding
+    // Keep this in sync with drawKeySignature()'s spacing so notes don't overlap.
+    const accidentalSpacing = 18;
+    return 140 + (keySig.accidentals.length * accidentalSpacing) + 20;
 }
 
 // Add note at position
