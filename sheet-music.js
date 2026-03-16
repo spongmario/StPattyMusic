@@ -3,7 +3,7 @@ const canvas = document.getElementById('sheet-music-canvas');
 const ctx = canvas.getContext('2d');
 
 // Canvas dimensions
-const STAFF_WIDTH = 1200;
+const STAFF_WIDTH = 1400;
 const STAFF_TOP = 160; // top of first staff system (increased to give more space for title/key)
 const STAFF_SPACING = 20; // Space between staff lines
 const NOTE_WIDTH = 30;
