@@ -63,7 +63,7 @@
             
             <div class="toolbar-section toolbar-row-start">
                 <button id="add-title-btn" class="btn btn-secondary" type="button" title="Add or edit the title of the sheet music">Add Title</button>
-                <button id="toggle-lyrics-btn" class="btn btn-secondary" type="button" title="Click, then click under a note to add or edit lyrics for that note">Add Lyrics</button>
+                <button id="toggle-lyrics-btn" class="btn btn-secondary" type="button" title="Add or edit lyrics in a text field below the staff">Add Lyrics</button>
                 <button id="convert-flats-btn" class="btn btn-flats-convert" type="button" title="Convert sharp notes to flat equivalents (C#→Db, D#→Eb, G#→Ab, A#→Bb, E#→F, B#→C). F# is left as F#.">Convert to Flats</button>
                 <div class="clear-all-wrapper">
                     <button id="clear-btn" class="btn btn-secondary" type="button" title="Clear all notes">Clear All</button>
@@ -82,7 +82,12 @@
         </div>
         
         <div class="sheet-music-container">
-            <canvas id="sheet-music-canvas"></canvas>
+            <div class="sheet-music-canvas-wrapper">
+                <canvas id="sheet-music-canvas"></canvas>
+                <div id="lyrics-overlay" class="lyrics-overlay hidden" aria-hidden="true">
+                    <textarea id="lyrics-textarea" class="lyrics-inline-input" placeholder="Type lyrics here…"></textarea>
+                </div>
+            </div>
         </div>
         
         <div id="note-edit-overlay" class="note-edit-overlay hidden" aria-hidden="true">
@@ -99,15 +104,6 @@
             </div>
         </div>
 
-        <!-- Lyrics edit tooltip (inline, near the note) -->
-        <div id="lyrics-tooltip" class="lyrics-tooltip hidden" aria-hidden="true">
-            <input id="lyrics-input" type="text" class="lyrics-input" placeholder="Enter lyric..." />
-            <div class="lyrics-tooltip-actions">
-                <button id="lyrics-save-btn" class="btn btn-secondary" type="button">Save</button>
-                <button id="lyrics-clear-btn" class="btn btn-light" type="button">Clear</button>
-            </div>
-        </div>
-        
         <div class="instructions">
             <p><strong>Instructions:</strong> Hover over the staff to preview placement, then click to place a note. Notes automatically use the key signature (sharps/flats). Use the Duration dropdown to choose note type. To edit a note, click <strong>Edit note</strong>, then click the note you want to change and choose ♯/♮/♭ or delete from the popup.</p>
         </div>
