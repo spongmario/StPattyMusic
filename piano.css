@@ -1,0 +1,249 @@
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background: linear-gradient(135deg, #f4f0e8 0%, #e8e0d4 50%, #ddd4c6 100%);
+    min-height: 100vh;
+    padding: 20px;
+    color: #333;
+}
+
+.container {
+    max-width: 1200px;
+    margin: 0 auto;
+}
+
+header {
+    margin-bottom: 30px;
+}
+
+.back-link {
+    display: inline-block;
+    margin-bottom: 15px;
+    color: #667eea;
+    text-decoration: none;
+    font-weight: 500;
+    transition: color 0.3s ease;
+}
+
+.back-link:hover {
+    color: #764ba2;
+}
+
+h1 {
+    text-align: center;
+    color: white;
+    margin-bottom: 30px;
+    font-size: 2.5em;
+    text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.3);
+}
+
+.key-selector-section {
+    background: #faf8f4;
+    border-radius: 15px;
+    padding: 25px;
+    margin-bottom: 30px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    border: 1px solid rgba(122, 144, 112, 0.25);
+}
+
+.key-selector-section h2 {
+    margin-bottom: 20px;
+    color: #6b7d5a;
+    text-align: center;
+}
+
+.key-buttons {
+    display: flex;
+    gap: 30px;
+    flex-wrap: wrap;
+    justify-content: center;
+}
+
+.major-keys, .minor-keys {
+    flex: 1;
+    min-width: 300px;
+}
+
+.major-keys h3, .minor-keys h3 {
+    margin-bottom: 15px;
+    color: #555;
+    text-align: center;
+    font-size: 1.2em;
+}
+
+.button-group {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 10px;
+    justify-content: center;
+}
+
+.key-btn {
+    padding: 10px 20px;
+    font-size: 14px;
+    border: 2px solid #7a9070;
+    background: white;
+    color: #6b7d5a;
+    border-radius: 8px;
+    cursor: pointer;
+    transition: all 0.3s ease;
+    font-weight: 500;
+}
+
+.key-btn:hover {
+    background: #7a9070;
+    color: white;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(122, 144, 112, 0.3);
+}
+
+.key-btn.active {
+    background: #7a9070;
+    color: white;
+    box-shadow: 0 4px 12px rgba(122, 144, 112, 0.5);
+}
+
+.selected-key-display {
+    margin-top: 25px;
+    padding: 20px;
+    background: #f5f2ec;
+    border-radius: 10px;
+    text-align: center;
+    border: 1px solid rgba(122, 144, 112, 0.25);
+}
+
+#selected-key-text {
+    font-size: 1.5em;
+    font-weight: bold;
+    color: #6b7d5a;
+    margin-bottom: 10px;
+}
+
+#key-notes-text {
+    font-size: 1.1em;
+    color: #666;
+}
+
+.piano-container {
+    background: #faf8f4;
+    border-radius: 15px;
+    padding: 30px;
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.2);
+    overflow-x: auto;
+    border: 1px solid rgba(122, 144, 112, 0.25);
+}
+
+.piano {
+    display: block;
+    position: relative;
+    margin: 0 auto;
+    width: fit-content;
+    min-height: 300px;
+}
+
+.piano-key {
+    position: relative;
+    cursor: pointer;
+    user-select: none;
+    transition: all 0.1s ease;
+}
+
+.white-key {
+    width: 60px;
+    height: 300px;
+    background: #fff;
+    border: 1px solid #ccc;
+    border-radius: 0 0 8px 8px;
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+    z-index: 1;
+    display: inline-block;
+    vertical-align: top;
+}
+
+.white-key:hover {
+    background: #f0f0f0;
+}
+
+.white-key.active {
+    background: #e0e0e0;
+    transform: translateY(2px);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.white-key.in-key {
+    background: #e0ead8;
+    border-color: #7a9070;
+}
+
+.white-key.in-key.active {
+    background: #d0ddc4;
+}
+
+.black-key {
+    width: 40px;
+    height: 180px;
+    background: #333;
+    border-radius: 0 0 5px 5px;
+    position: absolute;
+    top: 0;
+    z-index: 2;
+    box-shadow: 0 3px 8px rgba(0, 0, 0, 0.4);
+}
+
+.black-key:hover {
+    background: #222;
+}
+
+.black-key.active {
+    background: #111;
+    transform: translateY(2px);
+    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.3);
+}
+
+.black-key.in-key {
+    background: #6b7d5a;
+    box-shadow: 0 3px 8px rgba(107, 125, 90, 0.6);
+}
+
+.black-key.in-key.active {
+    background: #5d6d4d;
+}
+
+.key-label {
+    position: absolute;
+    bottom: 10px;
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: 12px;
+    font-weight: bold;
+    color: #666;
+}
+
+.white-key .key-label {
+    color: #333;
+}
+
+.black-key .key-label {
+    color: #fff;
+}
+
+@media (max-width: 768px) {
+    .key-buttons {
+        flex-direction: column;
+    }
+    
+    .white-key {
+        width: 40px;
+        height: 200px;
+    }
+    
+    .black-key {
+        width: 28px;
+        height: 120px;
+    }
+}
