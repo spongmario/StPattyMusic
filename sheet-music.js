@@ -411,7 +411,7 @@ function drawLyricsForStaff(staffIndex) {
     const STAFF_LINES = getStaffLines(0);
     const startY = STAFF_LINES[4] + STAFF_SPACING * 1.2;
     const lineHeight = 20;
-    const lines = lyricsText.split('\n').map(s => s.trim()).filter(Boolean);
+    const lines = lyricsText.split('\n');
     if (lines.length === 0) return;
     ctx.save();
     ctx.font = '16px "Segoe UI", system-ui, sans-serif';
@@ -442,6 +442,88 @@ function positionLyricsOverlay() {
     lyricsOverlay.style.top = r.top + 'px';
     lyricsOverlay.style.width = r.width + 'px';
     lyricsOverlay.style.height = r.height + 'px';
+}
+
+// Measure text width using a hidden span; copy textarea's computed font so it matches exactly.
+let _measureSpan = null;
+function getTextWidth(text) {
+    if (!_measureSpan) {
+        _measureSpan = document.createElement('span');
+        _measureSpan.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;';
+        document.body.appendChild(_measureSpan);
+    }
+    if (lyricsTextarea) {
+        const s = window.getComputedStyle(lyricsTextarea);
+        _measureSpan.style.font = s.font;
+        _measureSpan.style.letterSpacing = s.letterSpacing;
+    }
+    _measureSpan.textContent = text;
+    return _measureSpan.getBoundingClientRect().width;
+}
+
+// Compute distance (CSS px) from textarea text start to the note, and current first-line width.
+function getNoteOffsetAndLineWidth(noteX) {
+    const canvasRect = canvas.getBoundingClientRect();
+    const textareaRect = lyricsTextarea.getBoundingClientRect();
+    const scale = canvasRect.width / canvas.width;
+    const style = window.getComputedStyle(lyricsTextarea);
+    const paddingLeft = parseFloat(style.paddingLeft) || 0;
+    const noteXViewport = canvasRect.left + noteX * scale;
+    const textStartX = textareaRect.left + paddingLeft;
+    const relXCss = noteXViewport - textStartX;
+    const text = lyricsTextarea.value;
+    const firstNewline = text.indexOf('\n');
+    const firstLine = firstNewline === -1 ? text : text.slice(0, firstNewline);
+    const lineWidth = getTextWidth(firstLine);
+    return { relXCss, firstLine, firstNewline, text, lineWidth };
+}
+
+// Snap cursor under the note. If the note is to the right of the current text, insert spaces
+// so the cursor can sit in empty space under the note (like tabbing/spacing manually).
+function snapLyricsCursorToNote(note) {
+    if (!lyricsTextarea) return;
+    const { relXCss, firstLine, firstNewline, text, lineWidth } = getNoteOffsetAndLineWidth(note.x);
+    if (relXCss <= 0) {
+        lyricsTextarea.setSelectionRange(0, 0);
+        lyricsTextarea.focus();
+        return;
+    }
+
+    let newValue = text;
+    let cursorPos;
+
+    if (relXCss > lineWidth) {
+        // Note is to the right of the text – insert spaces so the caret can sit under the note
+        const spaceWidth = getTextWidth(' ');
+        const needWidth = relXCss - lineWidth;
+        let numSpaces = spaceWidth > 0 ? Math.max(0, Math.ceil(needWidth / spaceWidth)) : 0;
+        numSpaces = Math.max(0, numSpaces - 5); // align slightly left of note (about 5 spaces)
+        const spaces = ' '.repeat(numSpaces);
+        if (firstNewline === -1) {
+            newValue = firstLine + spaces;
+            cursorPos = firstLine.length + numSpaces;
+        } else {
+            newValue = firstLine + spaces + '\n' + text.slice(firstNewline + 1);
+            cursorPos = firstLine.length + numSpaces;
+        }
+        lyricsTextarea.value = newValue;
+    } else {
+        // Note is within the current line – find character index
+        let i = 0;
+        while (i <= firstLine.length) {
+            if (getTextWidth(firstLine.slice(0, i)) <= relXCss) i++;
+            else break;
+        }
+        cursorPos = Math.min(i, firstLine.length);
+    }
+
+    const safeIdx = Math.max(0, Math.min(cursorPos, lyricsTextarea.value.length));
+    const applySelection = () => {
+        lyricsTextarea.setSelectionRange(safeIdx, safeIdx);
+        lyricsTextarea.focus();
+    };
+    setTimeout(applySelection, 0);
+    setTimeout(applySelection, 100);
 }
 
 // Draw a note
@@ -1034,9 +1116,7 @@ function hitTestNote(canvasX, canvasY) {
 }
 
 function updateHoverFromEvent(e) {
-    const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const { x, y } = canvasCoordsFromEvent(e);
     const staffIndex = getStaffIndexFromY(y);
     if (staffIndex === null) {
         hoveredPlacement = null;
@@ -1093,27 +1173,52 @@ document.getElementById('duration-select').addEventListener('change', () => {
     redraw();
 });
 
-// Handle canvas click: in normal mode, place a note; in edit mode, open edit popup for a clicked note
-canvas.addEventListener('click', (e) => {
+// Convert mouse position from display coords to canvas (internal) coords (handles scaling)
+function canvasCoordsFromEvent(e) {
     const rect = canvas.getBoundingClientRect();
-    const x = e.clientX - rect.left;
-    const y = e.clientY - rect.top;
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return {
+        x: (e.clientX - rect.left) * scaleX,
+        y: (e.clientY - rect.top) * scaleY
+    };
+}
+
+// Lyrics snap: when in lyrics mode, any click whose *position* is over a note on the staff
+// snaps the cursor. Use document capture so we see it even when the event target is the textarea.
+function handleLyricsSnapClick(e) {
+    if (!isLyricsEditMode) return;
+    const rect = canvas.getBoundingClientRect();
+    if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) return;
+    const { x, y } = canvasCoordsFromEvent(e);
+    const lyricsRect = getLyricsOverlayRect();
+    if (y >= lyricsRect.top) return;
+    const staffIndex = getStaffIndexFromY(y);
+    if (staffIndex === null) return;
+    const hit = hitTestNote(x, y);
+    if (hit && (hit.staffIndex ?? 0) === 0) {
+        // Don't preventDefault/stopPropagation – let the textarea lose focus so when we
+        // focus it again and setSelectionRange, the browser doesn't restore the old cursor.
+        snapLyricsCursorToNote(hit);
+    }
+}
+document.addEventListener('click', handleLyricsSnapClick, true);
+
+// Handle canvas click: in normal mode, place a note; in edit mode, open edit popup
+canvas.addEventListener('click', (e) => {
+    if (isLyricsEditMode) return; // snap already handled by document capture
+    const { x, y } = canvasCoordsFromEvent(e);
     const staffIndex = getStaffIndexFromY(y);
     if (staffIndex === null) return;
 
     const hit = hitTestNote(x, y);
     if (isEditMode) {
-        // In edit mode, only act when a note is clicked
         if (hit) {
             openNoteEditPopup(hit.id);
         }
         return;
     }
 
-    // Lyrics edit mode: no canvas click action (lyrics are edited in the panel below)
-    if (isLyricsEditMode) return;
-
-    // Normal mode: place new note at hovered position (if any)
     if (!hit && hoveredPlacement) {
         selectedNoteId = null;
         addNoteFromPlacement(hoveredPlacement);
