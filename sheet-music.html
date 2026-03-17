@@ -44,6 +44,17 @@
                     <option value="Cb">Cb Major / Ab Minor</option>
                 </select>
             </div>
+
+            <div class="toolbar-section">
+                <div class="note-type-bar" aria-label="Note shortcut">
+                    <span class="note-type-bar-label">Note shortcut:</span>
+                    <button type="button" class="note-type-btn" data-duration="whole" title="Whole note"><span class="note-type-symbol" aria-hidden="true">𝅝</span><span class="note-type-key">1</span></button>
+                    <button type="button" class="note-type-btn" data-duration="half" title="Half note"><span class="note-type-symbol" aria-hidden="true">𝅗𝅥</span><span class="note-type-key">2</span></button>
+                    <button type="button" class="note-type-btn note-type-btn-active" data-duration="quarter" title="Quarter note"><span class="note-type-symbol" aria-hidden="true">𝅘𝅥</span><span class="note-type-key">3</span></button>
+                    <button type="button" class="note-type-btn" data-duration="eighth" title="Eighth note"><span class="note-type-symbol" aria-hidden="true">𝅘𝅥𝅮</span><span class="note-type-key">4</span></button>
+                    <button type="button" class="note-type-btn" data-duration="sixteenth" title="Sixteenth note"><span class="note-type-symbol" aria-hidden="true">𝅘𝅥𝅯</span><span class="note-type-key">5</span></button>
+                </div>
+            </div>
             
             <div class="toolbar-section">
                 <!-- Edit mode removed: click notes directly to select/drag/edit -->
@@ -72,14 +83,6 @@
         </div>
         
         <div class="sheet-music-container">
-            <div class="note-type-bar" aria-label="Note shortcut">
-                <span class="note-type-bar-label">Note shortcut:</span>
-                <button type="button" class="note-type-btn" data-duration="whole" title="Whole note"><span class="note-type-symbol" aria-hidden="true">𝅝</span><span class="note-type-key">1</span></button>
-                <button type="button" class="note-type-btn" data-duration="half" title="Half note"><span class="note-type-symbol" aria-hidden="true">𝅗𝅥</span><span class="note-type-key">2</span></button>
-                <button type="button" class="note-type-btn note-type-btn-active" data-duration="quarter" title="Quarter note"><span class="note-type-symbol" aria-hidden="true">𝅘𝅥</span><span class="note-type-key">3</span></button>
-                <button type="button" class="note-type-btn" data-duration="eighth" title="Eighth note"><span class="note-type-symbol" aria-hidden="true">𝅘𝅥𝅮</span><span class="note-type-key">4</span></button>
-                <button type="button" class="note-type-btn" data-duration="sixteenth" title="Sixteenth note"><span class="note-type-symbol" aria-hidden="true">𝅘𝅥𝅯</span><span class="note-type-key">5</span></button>
-            </div>
             <div class="sheet-music-canvas-wrapper">
                 <canvas id="sheet-music-canvas"></canvas>
                 <div id="lyrics-overlays-container" class="lyrics-overlays-container hidden" aria-hidden="true">
