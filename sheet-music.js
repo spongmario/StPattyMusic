@@ -1055,6 +1055,133 @@ function clearAll() {
     redraw();
 }
 
+// --- Save / Open (localStorage + file) ---
+const SAVE_STORAGE_KEY = 'stpatty-sheet-music-project';
+const SAVE_VERSION = 1;
+
+function getStateForSave() {
+    return {
+        version: SAVE_VERSION,
+        sheetTitle: sheetTitle || '',
+        staffCount: staffCount,
+        lyricsText: lyricsText || '',
+        lyricsLineOffset: lyricsLineOffset,
+        currentKey: currentKey,
+        currentClef: currentClef,
+        currentDuration: currentDuration,
+        notes: JSON.parse(JSON.stringify(notes))
+    };
+}
+
+function loadState(data) {
+    if (!data || typeof data !== 'object') return false;
+    const v = data.version;
+    if (v !== 1) return false;
+
+    sheetTitle = data.sheetTitle || '';
+    staffCount = Math.max(1, Number(data.staffCount) || 1);
+    lyricsText = data.lyricsText || '';
+    lyricsLineOffset = Number(data.lyricsLineOffset) || 0;
+    currentKey = data.currentKey && KEY_SIGNATURES[data.currentKey] ? data.currentKey : 'C';
+    currentClef = data.currentClef === 'treble' ? 'treble' : 'bass';
+    currentDuration = ['whole', 'half', 'quarter', 'eighth', 'sixteenth'].includes(data.currentDuration) ? data.currentDuration : 'quarter';
+
+    notes = Array.isArray(data.notes) ? data.notes.map(function (n) {
+        return {
+            id: n.id != null ? String(n.id) : String(nextNoteId++),
+            x: Number(n.x) || 0,
+            staffIndex: Math.max(0, Math.min(staffCount - 1, Number(n.staffIndex) || 0)),
+            step: Number(n.step),
+            y: Number(n.y),
+            note: n.note || 'C',
+            octave: Number(n.octave),
+            duration: ['whole', 'half', 'quarter', 'eighth', 'sixteenth'].includes(n.duration) ? n.duration : 'quarter',
+            explicitAccidental: n.explicitAccidental || undefined
+        };
+    }) : [];
+
+    let maxId = 0;
+    notes.forEach(function (n) {
+        const num = parseInt(n.id, 10);
+        if (!isNaN(num)) maxId = Math.max(maxId, num);
+    });
+    nextNoteId = maxId + 1;
+
+    noteHistory = [];
+    pushHistory();
+    selectedNoteId = null;
+    hoveredPlacement = null;
+    originalNotesBeforeConversion = null;
+
+    const keySelect = document.getElementById('key-select');
+    const clefSelect = document.getElementById('clef-select');
+    if (keySelect) keySelect.value = currentKey;
+    if (clefSelect) clefSelect.value = currentClef;
+    setDuration(currentDuration);
+    resizeCanvas();
+    updateLyricsButton();
+    updateFlatsButtonState();
+    redraw();
+    return true;
+}
+
+function saveForLater() {
+    try {
+        const state = getStateForSave();
+        localStorage.setItem(SAVE_STORAGE_KEY, JSON.stringify(state));
+        showSaveOpenMessage('Saved for later. Come back anytime to continue.');
+    } catch (e) {
+        showSaveOpenMessage('Could not save (storage may be full or disabled).', true);
+    }
+}
+
+function openFromFile(file) {
+    const reader = new FileReader();
+    reader.onload = function () {
+        try {
+            const data = JSON.parse(reader.result);
+            if (loadState(data)) {
+                showSaveOpenMessage('Song loaded.');
+            } else {
+                showSaveOpenMessage('Invalid or unsupported song file.', true);
+            }
+        } catch (err) {
+            showSaveOpenMessage('Could not read file. Use a valid saved song (.json).', true);
+        }
+    };
+    reader.readAsText(file);
+}
+
+function downloadSongFile() {
+    const state = getStateForSave();
+    const name = (sheetTitle && sheetTitle.trim()) ? sheetTitle.trim().replace(/[^\w\s-]/g, '').replace(/\s+/g, '-').slice(0, 60) : 'sheet-music';
+    const blob = new Blob([JSON.stringify(state, null, 2)], { type: 'application/json' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = name + '.json';
+    a.click();
+    URL.revokeObjectURL(a.href);
+    showSaveOpenMessage('Downloaded. Use Open to load this file later.');
+}
+
+function showSaveOpenMessage(text, isError) {
+    var el = document.getElementById('save-open-message');
+    if (!el) {
+        el = document.createElement('div');
+        el.id = 'save-open-message';
+        el.setAttribute('aria-live', 'polite');
+        el.className = 'save-open-message';
+        document.querySelector('.toolbar').appendChild(el);
+    }
+    el.textContent = text;
+    el.classList.toggle('save-open-message-error', !!isError);
+    el.classList.remove('save-open-message-hide');
+    clearTimeout(showSaveOpenMessage._tid);
+    showSaveOpenMessage._tid = setTimeout(function () {
+        el.classList.add('save-open-message-hide');
+    }, 4000);
+}
+
 function showClearConfirmTooltip() {
     const tooltip = document.getElementById('clear-confirm-tooltip');
     tooltip.classList.remove('hidden');
@@ -1438,6 +1565,23 @@ function exportToPDF() {
 
 document.getElementById('export-pdf-btn').addEventListener('click', exportToPDF);
 
+// Save for later / Open / Download
+document.getElementById('save-later-btn').addEventListener('click', saveForLater);
+document.getElementById('download-btn').addEventListener('click', downloadSongFile);
+var openFileInput = document.getElementById('open-file-input');
+document.getElementById('open-btn').addEventListener('click', function () {
+    if (openFileInput) openFileInput.click();
+});
+if (openFileInput) {
+    openFileInput.addEventListener('change', function () {
+        var file = openFileInput.files && openFileInput.files[0];
+        if (file) {
+            openFromFile(file);
+            openFileInput.value = '';
+        }
+    });
+}
+
 function getSelectedNote() {
     if (!selectedNoteId) return null;
     return notes.find(n => n.id === selectedNoteId) || null;
@@ -1741,3 +1885,15 @@ pushHistory();
 
 // Initial draw
 redraw();
+
+// On load: offer to continue saved song from localStorage
+(function () {
+    try {
+        var raw = localStorage.getItem(SAVE_STORAGE_KEY);
+        if (!raw) return;
+        var data = JSON.parse(raw);
+        if (!data || data.version !== SAVE_VERSION) return;
+        if (!confirm('You have a saved song. Load it to continue where you left off?')) return;
+        loadState(data);
+    } catch (e) { /* ignore */ }
+})();
