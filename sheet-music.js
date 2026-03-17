@@ -532,11 +532,29 @@ function drawNote(x, staffIndex, step, note, octave, duration, isSelected = fals
     const STAFF_LINES = getStaffLines(staffIndex);
     const noteY = staffStepToY(step, staffIndex);
     
-    // Draw note head
-    ctx.fillStyle = isSelected ? '#1f5fbf' : '#000';
+    // Draw note head: whole note = thick black oval with white hollow; half = stroke-only hollow; quarter and shorter = filled
+    const isHollow = duration === 'whole' || duration === 'half';
+    const strokeColor = isSelected ? '#1f5fbf' : '#000';
+    const fillColor = isSelected ? '#1f5fbf' : '#000';
+
     ctx.beginPath();
     ctx.ellipse(x, noteY, NOTE_WIDTH / 2, NOTE_HEIGHT / 2, 0, 0, 2 * Math.PI);
-    ctx.fill();
+    if (duration === 'whole') {
+        // Whole note: thick black oval with clear white hollow (match reference exactly)
+        ctx.fillStyle = isSelected ? '#1f5fbf' : '#000';
+        ctx.fill();
+        ctx.fillStyle = '#fff';
+        ctx.beginPath();
+        ctx.ellipse(x, noteY, (NOTE_WIDTH / 2) * 0.72, (NOTE_HEIGHT / 2) * 0.72, 0, 0, 2 * Math.PI);
+        ctx.fill();
+    } else if (isHollow) {
+        ctx.strokeStyle = strokeColor;
+        ctx.lineWidth = 2.5;
+        ctx.stroke();
+    } else {
+        ctx.fillStyle = fillColor;
+        ctx.fill();
+    }
 
     if (isSelected) {
         ctx.save();
