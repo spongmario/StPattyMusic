@@ -420,34 +420,34 @@ function drawLyricsLine(staffIndex) {
     ctx.restore();
 }
 
-// Draw lyrics text under the first staff (free-form block with user spacing).
+// Draw lyrics text under each staff (free-form; line i goes under staff i).
 // When in lyrics edit mode we don't draw—the overlay textarea is shown instead.
 function drawLyricsForStaff(staffIndex) {
-    if (staffIndex !== 0 || isLyricsEditMode) return;
-    if (!lyricsText || lyricsText.trim() === '') return;
-    const startY = getLyricsBaselineY(0);
-    const lineHeight = 20;
+    if (isLyricsEditMode) return;
     const lines = lyricsText.split('\n');
-    if (lines.length === 0) return;
+    const line = lines[staffIndex];
+    if (!line || line.trim() === '') return;
+    const startY = getLyricsBaselineY(staffIndex);
     ctx.save();
     ctx.font = '16px "Segoe UI", system-ui, sans-serif';
     ctx.fillStyle = '#333';
     ctx.textAlign = 'left';
     ctx.textBaseline = 'middle';
-    const leftX = getKeySignatureWidth() + 10;
-    lines.forEach((line, i) => {
-        ctx.fillText(line, leftX, startY + i * lineHeight);
-    });
+    const leftX = 50; // align with left edge of staff
+    ctx.fillText(line, leftX, startY);
     ctx.restore();
 }
 
-// Bounds (in canvas pixels) for the lyrics zone under the first staff
-function getLyricsOverlayRect() {
-    const baselineY = getLyricsBaselineY(0);
+// Height of one staff's lyrics zone (for overlay layout)
+const LYRICS_ZONE_HEIGHT_PER_STAFF = 88;
+
+// Bounds (in canvas pixels) for the lyrics zone under a single staff. Left edge of staff (x=50).
+function getLyricsOverlayRect(staffIndex) {
+    const baselineY = getLyricsBaselineY(staffIndex);
     const top = baselineY - STAFF_SPACING * 0.7;
-    const left = getKeySignatureWidth() + 8;
+    const left = 50;
     const width = STAFF_WIDTH - left - 24;
-    const height = 88;
+    const height = LYRICS_ZONE_HEIGHT_PER_STAFF;
     return { left, top, width, height };
 }
 
@@ -459,25 +459,60 @@ function isPointOnLyricsLine(x, y) {
     return x >= 50 && x <= STAFF_WIDTH - 50;
 }
 
+// Get the lyrics textarea for a given staff (when in lyrics edit mode). Used for snap-to-note.
+function getLyricsTextareaForStaff(staffIndex) {
+    if (!lyricsOverlaysContainer) return null;
+    const overlay = lyricsOverlaysContainer.children[staffIndex];
+    return overlay ? overlay.querySelector('textarea') : null;
+}
+
+// One overlay + textarea per staff. Create/update when entering lyrics mode or on resize.
+function ensureLyricsOverlays() {
+    if (!lyricsOverlaysContainer) return;
+    const lines = lyricsText.split('\n');
+    while (lyricsOverlaysContainer.children.length > staffCount) {
+        lyricsOverlaysContainer.lastChild.remove();
+    }
+    while (lyricsOverlaysContainer.children.length < staffCount) {
+        const overlay = document.createElement('div');
+        overlay.className = 'lyrics-overlay';
+        const ta = document.createElement('textarea');
+        ta.className = 'lyrics-inline-input';
+        ta.placeholder = 'Type lyrics here…';
+        ta.dataset.staffIndex = String(lyricsOverlaysContainer.children.length);
+        overlay.appendChild(ta);
+        lyricsOverlaysContainer.appendChild(overlay);
+        addLyricsTextareaKeydown(ta);
+    }
+    for (let i = 0; i < staffCount; i++) {
+        const overlay = lyricsOverlaysContainer.children[i];
+        const ta = overlay.querySelector('textarea');
+        const r = getLyricsOverlayRect(i);
+        overlay.style.left = r.left + 'px';
+        overlay.style.top = r.top + 'px';
+        overlay.style.width = r.width + 'px';
+        overlay.style.height = r.height + 'px';
+        ta.value = lines[i] || '';
+        ta.dataset.staffIndex = String(i);
+    }
+}
+
 function positionLyricsOverlay() {
-    if (!lyricsOverlay || !lyricsTextarea) return;
-    const r = getLyricsOverlayRect();
-    lyricsOverlay.style.left = r.left + 'px';
-    lyricsOverlay.style.top = r.top + 'px';
-    lyricsOverlay.style.width = r.width + 'px';
-    lyricsOverlay.style.height = r.height + 'px';
+    if (!isLyricsEditMode || !lyricsOverlaysContainer) return;
+    ensureLyricsOverlays();
 }
 
 // Measure text width using a hidden span; copy textarea's computed font so it matches exactly.
 let _measureSpan = null;
-function getTextWidth(text) {
+function getTextWidth(text, textareaEl) {
     if (!_measureSpan) {
         _measureSpan = document.createElement('span');
         _measureSpan.style.cssText = 'position:absolute;visibility:hidden;white-space:pre;';
         document.body.appendChild(_measureSpan);
     }
-    if (lyricsTextarea) {
-        const s = window.getComputedStyle(lyricsTextarea);
+    const ta = textareaEl || getLyricsTextareaForStaff(0);
+    if (ta) {
+        const s = window.getComputedStyle(ta);
         _measureSpan.style.font = s.font;
         _measureSpan.style.letterSpacing = s.letterSpacing;
     }
@@ -486,30 +521,34 @@ function getTextWidth(text) {
 }
 
 // Compute distance (CSS px) from textarea text start to the note, and current first-line width.
-function getNoteOffsetAndLineWidth(noteX) {
+function getNoteOffsetAndLineWidth(noteX, textareaEl) {
+    if (!textareaEl) return null;
     const canvasRect = canvas.getBoundingClientRect();
-    const textareaRect = lyricsTextarea.getBoundingClientRect();
+    const textareaRect = textareaEl.getBoundingClientRect();
     const scale = canvasRect.width / canvas.width;
-    const style = window.getComputedStyle(lyricsTextarea);
+    const style = window.getComputedStyle(textareaEl);
     const paddingLeft = parseFloat(style.paddingLeft) || 0;
     const noteXViewport = canvasRect.left + noteX * scale;
     const textStartX = textareaRect.left + paddingLeft;
     const relXCss = noteXViewport - textStartX;
-    const text = lyricsTextarea.value;
+    const text = textareaEl.value;
     const firstNewline = text.indexOf('\n');
     const firstLine = firstNewline === -1 ? text : text.slice(0, firstNewline);
-    const lineWidth = getTextWidth(firstLine);
+    const lineWidth = getTextWidth(firstLine, textareaEl);
     return { relXCss, firstLine, firstNewline, text, lineWidth };
 }
 
-// Snap cursor under the note. If the note is to the right of the current text, insert spaces
-// so the cursor can sit in empty space under the note (like tabbing/spacing manually).
+// Snap cursor under the note. Uses the textarea for the note's staff.
 function snapLyricsCursorToNote(note) {
-    if (!lyricsTextarea) return;
-    const { relXCss, firstLine, firstNewline, text, lineWidth } = getNoteOffsetAndLineWidth(note.x);
+    const staffIndex = note.staffIndex ?? 0;
+    const ta = getLyricsTextareaForStaff(staffIndex);
+    if (!ta) return;
+    const data = getNoteOffsetAndLineWidth(note.x, ta);
+    if (!data) return;
+    const { relXCss, firstLine, firstNewline, text, lineWidth } = data;
     if (relXCss <= 0) {
-        lyricsTextarea.setSelectionRange(0, 0);
-        lyricsTextarea.focus();
+        ta.setSelectionRange(0, 0);
+        ta.focus();
         return;
     }
 
@@ -517,11 +556,10 @@ function snapLyricsCursorToNote(note) {
     let cursorPos;
 
     if (relXCss > lineWidth) {
-        // Note is to the right of the text – insert spaces so the caret can sit under the note
-        const spaceWidth = getTextWidth(' ');
+        const spaceWidth = getTextWidth(' ', ta);
         const needWidth = relXCss - lineWidth;
         let numSpaces = spaceWidth > 0 ? Math.max(0, Math.ceil(needWidth / spaceWidth)) : 0;
-        numSpaces = Math.max(0, numSpaces - 5); // align slightly left of note (about 5 spaces)
+        numSpaces = Math.max(0, numSpaces - 5);
         const spaces = ' '.repeat(numSpaces);
         if (firstNewline === -1) {
             newValue = firstLine + spaces;
@@ -530,21 +568,20 @@ function snapLyricsCursorToNote(note) {
             newValue = firstLine + spaces + '\n' + text.slice(firstNewline + 1);
             cursorPos = firstLine.length + numSpaces;
         }
-        lyricsTextarea.value = newValue;
+        ta.value = newValue;
     } else {
-        // Note is within the current line – find character index
         let i = 0;
         while (i <= firstLine.length) {
-            if (getTextWidth(firstLine.slice(0, i)) <= relXCss) i++;
+            if (getTextWidth(firstLine.slice(0, i), ta) <= relXCss) i++;
             else break;
         }
         cursorPos = Math.min(i, firstLine.length);
     }
 
-    const safeIdx = Math.max(0, Math.min(cursorPos, lyricsTextarea.value.length));
+    const safeIdx = Math.max(0, Math.min(cursorPos, ta.value.length));
     const applySelection = () => {
-        lyricsTextarea.setSelectionRange(safeIdx, safeIdx);
-        lyricsTextarea.focus();
+        ta.setSelectionRange(safeIdx, safeIdx);
+        ta.focus();
     };
     setTimeout(applySelection, 0);
     setTimeout(applySelection, 100);
@@ -1397,23 +1434,26 @@ function canvasCoordsFromEvent(e) {
     };
 }
 
-// Lyrics snap: when in lyrics mode, any click whose *position* is over a note on the staff
-// snaps the cursor. Use document capture so we see it even when the event target is the textarea.
+// True if (x, y) in canvas coords is inside any staff's lyrics overlay zone (don't snap when clicking in a box).
+function isPointInAnyLyricsOverlay(x, y) {
+    for (let i = 0; i < staffCount; i++) {
+        const r = getLyricsOverlayRect(i);
+        if (y >= r.top && y <= r.top + r.height && x >= r.left && x <= r.left + r.width) return true;
+    }
+    return false;
+}
+
+// Lyrics snap: when in lyrics mode, click over a note snaps the cursor in that staff's textarea.
 function handleLyricsSnapClick(e) {
     if (!isLyricsEditMode) return;
     const rect = canvas.getBoundingClientRect();
     if (e.clientX < rect.left || e.clientX > rect.right || e.clientY < rect.top || e.clientY > rect.bottom) return;
     const { x, y } = canvasCoordsFromEvent(e);
-    const lyricsRect = getLyricsOverlayRect();
-    if (y >= lyricsRect.top) return;
+    if (isPointInAnyLyricsOverlay(x, y)) return;
     const staffIndex = getStaffIndexFromY(y);
     if (staffIndex === null) return;
     const hit = hitTestNote(x, y);
-    if (hit && (hit.staffIndex ?? 0) === 0) {
-        // Don't preventDefault/stopPropagation – let the textarea lose focus so when we
-        // focus it again and setSelectionRange, the browser doesn't restore the old cursor.
-        snapLyricsCursorToNote(hit);
-    }
+    if (hit) snapLyricsCursorToNote(hit);
 }
 document.addEventListener('click', handleLyricsSnapClick, true);
 
@@ -1624,8 +1664,7 @@ const popupNaturalBtn = document.getElementById('popup-natural-btn');
 const popupDeleteBtn = document.getElementById('popup-delete-btn');
 const popupCancelBtn = document.getElementById('popup-cancel-btn');
 const toggleLyricsBtn = document.getElementById('toggle-lyrics-btn');
-const lyricsOverlay = document.getElementById('lyrics-overlay');
-const lyricsTextarea = document.getElementById('lyrics-textarea');
+const lyricsOverlaysContainer = document.getElementById('lyrics-overlays-container');
 
 function updateEditModeButton() {
     if (!editModeBtn) return;
@@ -1652,17 +1691,22 @@ function updateLyricsButton() {
 
 function toggleLyricsMode() {
     isLyricsEditMode = !isLyricsEditMode;
-    if (lyricsOverlay && lyricsTextarea) {
+    if (lyricsOverlaysContainer) {
         if (isLyricsEditMode) {
-            lyricsTextarea.value = lyricsText;
-            positionLyricsOverlay();
-            lyricsOverlay.classList.remove('hidden');
-            lyricsOverlay.setAttribute('aria-hidden', 'false');
-            setTimeout(() => lyricsTextarea.focus(), 0);
+            ensureLyricsOverlays();
+            lyricsOverlaysContainer.classList.remove('hidden');
+            lyricsOverlaysContainer.setAttribute('aria-hidden', 'false');
+            const firstTa = getLyricsTextareaForStaff(0);
+            if (firstTa) setTimeout(() => firstTa.focus(), 0);
         } else {
-            lyricsText = lyricsTextarea.value;
-            lyricsOverlay.classList.add('hidden');
-            lyricsOverlay.setAttribute('aria-hidden', 'true');
+            const lines = [];
+            for (let i = 0; i < lyricsOverlaysContainer.children.length; i++) {
+                const ta = lyricsOverlaysContainer.children[i].querySelector('textarea');
+                lines.push(ta ? ta.value : '');
+            }
+            lyricsText = lines.join('\n');
+            lyricsOverlaysContainer.classList.add('hidden');
+            lyricsOverlaysContainer.setAttribute('aria-hidden', 'true');
         }
     }
     updateLyricsButton();
@@ -1697,10 +1741,9 @@ if (toggleLyricsBtn) {
     updateLyricsButton();
 }
 
-// Enter (without Shift) finishes adding lyrics; Shift+Enter inserts a newline.
-// Tab inserts a large space instead of moving focus.
-if (lyricsTextarea) {
-    lyricsTextarea.addEventListener('keydown', (e) => {
+// Attach Enter/Space/Tab handling to a lyrics textarea (one per staff).
+function addLyricsTextareaKeydown(ta) {
+    ta.addEventListener('keydown', (e) => {
         if (e.key === 'Enter') {
             if (!e.shiftKey && isLyricsEditMode) {
                 e.preventDefault();
@@ -1708,15 +1751,25 @@ if (lyricsTextarea) {
             }
             return;
         }
+        if (e.key === ' ') {
+            e.preventDefault();
+            const start = ta.selectionStart;
+            const end = ta.selectionEnd;
+            const before = ta.value.slice(0, start);
+            const after = ta.value.slice(end);
+            ta.value = before + ' ' + after;
+            ta.selectionStart = ta.selectionEnd = start + 1;
+            return;
+        }
         if (e.key === 'Tab') {
             e.preventDefault();
-            const start = lyricsTextarea.selectionStart;
-            const end = lyricsTextarea.selectionEnd;
-            const before = lyricsTextarea.value.slice(0, start);
-            const after = lyricsTextarea.value.slice(end);
-            const tabSpaces = '    '; // large space
-            lyricsTextarea.value = before + tabSpaces + after;
-            lyricsTextarea.selectionStart = lyricsTextarea.selectionEnd = start + tabSpaces.length;
+            const start = ta.selectionStart;
+            const end = ta.selectionEnd;
+            const before = ta.value.slice(0, start);
+            const after = ta.value.slice(end);
+            const tabSpaces = '    ';
+            ta.value = before + tabSpaces + after;
+            ta.selectionStart = ta.selectionEnd = start + tabSpaces.length;
             return;
         }
     });

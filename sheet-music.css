@@ -388,21 +388,32 @@ h1 {
     display: inline-block;
 }
 
-/* In-place lyrics field (overlays the lyrics zone under the first staff) */
-.lyrics-overlay {
+/* Container for one lyrics box per staff (no size; children are absolutely positioned) */
+.lyrics-overlays-container {
     position: absolute;
     left: 0;
     top: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none;
+}
+
+.lyrics-overlays-container.hidden {
+    display: none;
+}
+
+/* One lyrics box per staff, positioned under that staff only */
+.lyrics-overlay {
+    position: absolute;
     box-sizing: border-box;
     padding: 0;
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    pointer-events: none; /* allow clicks to pass through to canvas (notes) */
+    pointer-events: none;
 }
 
-.lyrics-overlay.hidden {
-    display: none;
+.lyrics-overlay .lyrics-inline-input {
+    pointer-events: auto;
 }
 
 .lyrics-inline-input {
