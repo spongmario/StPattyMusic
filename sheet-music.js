@@ -1082,6 +1082,8 @@ function addNoteFromPlacement(placement) {
     // Snap to grid (every 50 pixels)
     const snappedX = Math.round(placement.x / NOTE_COLUMN_WIDTH) * NOTE_COLUMN_WIDTH;
     const snappedXClamped = Math.max(minX, Math.min(STAFF_WIDTH - 100, snappedX));
+    const staffIdx = placement.staffIndex ?? 0;
+    if (isColumnOccupiedOnStaff(snappedXClamped, staffIdx)) return; // only one note per column per staff
 
     const step = placement.step;
     const pitch = staffStepToPitch(step);
@@ -1336,6 +1338,11 @@ function getSnappedXForCanvasX(x) {
     return Math.max(minX, Math.min(STAFF_WIDTH - 100, snappedX));
 }
 
+// True if there is already a note at this column (x) on this staff — only one note per column per staff (left/right only, no stacking).
+function isColumnOccupiedOnStaff(snappedX, staffIndex) {
+    return notes.some(n => (n.staffIndex ?? 0) === staffIndex && n.x === snappedX);
+}
+
 function hitTestNote(canvasX, canvasY) {
     const staffIndex = getStaffIndexFromY(canvasY);
     if (staffIndex === null) return null;
@@ -1399,6 +1406,11 @@ function updateHoverFromEvent(e) {
     const lines = getStaffLines(staffIndex);
     const step = Math.round((lines[4] - y) / (STAFF_SPACING / 2));
     const snappedX = getSnappedXForCanvasX(x);
+    if (isColumnOccupiedOnStaff(snappedX, staffIndex)) {
+        hoveredPlacement = null;
+        redraw();
+        return;
+    }
     const pitch = staffStepToPitch(step);
     if (!pitch) {
         hoveredPlacement = null;
