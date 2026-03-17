@@ -620,7 +620,7 @@ function snapLyricsCursorToNote(note) {
 }
 
 // Draw a note
-function drawNote(x, staffIndex, step, note, octave, duration, isSelected = false, isPreview = false) {
+function drawNote(x, staffIndex, step, note, octave, duration, isSelected = false, isPreview = false, options = {}) {
     const noteKey = getNoteKey(note, octave);
     const STAFF_LINES = getStaffLines(staffIndex);
     const noteY = staffStepToY(step, staffIndex);
@@ -660,8 +660,10 @@ function drawNote(x, staffIndex, step, note, octave, duration, isSelected = fals
         ctx.restore();
     }
     
-    // Draw stem if not whole note
-    if (duration !== 'whole') {
+    const shouldDrawStem = duration !== 'whole' && (options.drawStem ?? true);
+
+    // Draw stem if not whole note (and not suppressed, e.g. for beamed notes)
+    if (shouldDrawStem) {
         const stemLength = duration === 'half' ? 60 : 80;
         // Pass full positioning info so stems are correctly placed and perfectly vertical
         const geom = getStemGeometry(
@@ -1014,10 +1016,31 @@ function redraw() {
         drawStaff(i);
         drawLyricsLine(i);
     }
-    
-    // Draw all notes
+
+    // Pre-compute beam groups so we can avoid double-drawing stems for beamed notes.
+    // Only compute beams within the same staff system.
+    const groups = [];
+    for (let i = 0; i < staffCount; i++) {
+        const inStaff = notes.filter(n => (n.staffIndex ?? 0) === i);
+        groups.push(...computeBeamGroups(inStaff));
+    }
+    const beamedIds = new Set();
+    for (const g of groups) for (const n of g) beamedIds.add(n.id);
+
+    // Draw all notes (noteheads + accidentals + ledger lines; stems handled here unless beamed)
     notes.forEach(note => {
-        drawNote(note.x, note.staffIndex ?? 0, note.step, note.note, note.octave, note.duration, note.id === selectedNoteId);
+        const drawStem = !(beamedIds.has(note.id) && isBeamableDuration(note.duration));
+        drawNote(
+            note.x,
+            note.staffIndex ?? 0,
+            note.step,
+            note.note,
+            note.octave,
+            note.duration,
+            note.id === selectedNoteId,
+            false,
+            { drawStem }
+        );
     });
 
     // Draw lyrics text after notes so they sit cleanly under the staff
@@ -1026,14 +1049,6 @@ function redraw() {
     }
 
     // Beam runs of adjacent 8th/16th notes (and draw flags for remaining unbeamed notes)
-    // Only compute beams within the same staff system
-    const groups = [];
-    for (let i = 0; i < staffCount; i++) {
-        const inStaff = notes.filter(n => (n.staffIndex ?? 0) === i);
-        groups.push(...computeBeamGroups(inStaff));
-    }
-    const beamedIds = new Set();
-    for (const g of groups) for (const n of g) beamedIds.add(n.id);
     drawBeams(groups);
     drawFlagsForUnbeamedNotes(notes, beamedIds);
 
