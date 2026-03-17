@@ -685,6 +685,19 @@ function isBeamableDuration(duration) {
     return duration === 'eighth' || duration === 'sixteenth';
 }
 
+const MAX_NOTES_PER_BEAM = 4;
+
+// Split a run of beamable notes into groups of at most MAX_NOTES_PER_BEAM.
+// Only groups with 2+ notes are returned (single notes get flags instead).
+function splitBeamRunIntoGroups(run) {
+    const result = [];
+    for (let i = 0; i < run.length; i += MAX_NOTES_PER_BEAM) {
+        const chunk = run.slice(i, i + MAX_NOTES_PER_BEAM);
+        if (chunk.length >= 2) result.push(chunk);
+    }
+    return result;
+}
+
 function computeBeamGroups(notesIn) {
     const sorted = [...notesIn].sort((a, b) => a.x - b.x);
     const groups = [];
@@ -692,7 +705,7 @@ function computeBeamGroups(notesIn) {
 
     for (const n of sorted) {
         if (!isBeamableDuration(n.duration)) {
-            if (current.length >= 2) groups.push(current);
+            groups.push(...splitBeamRunIntoGroups(current));
             current = [];
             continue;
         }
@@ -708,11 +721,11 @@ function computeBeamGroups(notesIn) {
         if (dx <= NOTE_COLUMN_WIDTH * 1.5) {
             current.push(n);
         } else {
-            if (current.length >= 2) groups.push(current);
+            groups.push(...splitBeamRunIntoGroups(current));
             current = [n];
         }
     }
-    if (current.length >= 2) groups.push(current);
+    groups.push(...splitBeamRunIntoGroups(current));
 
     return groups;
 }
