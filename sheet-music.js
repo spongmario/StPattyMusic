@@ -1260,18 +1260,6 @@ function hideClearConfirmTooltip() {
     tooltip.setAttribute('aria-hidden', 'true');
 }
 
-// Undo last note
-function undo() {
-    if (noteHistory.length === 0) return;
-    noteHistory.pop(); // remove current snapshot
-    const prev = noteHistory[noteHistory.length - 1];
-    notes = prev ? JSON.parse(JSON.stringify(prev)) : [];
-    if (selectedNoteId && !notes.some(n => n.id === selectedNoteId)) {
-        selectedNoteId = null;
-    }
-    redraw();
-}
-
 function yToNearestStaffStep(y) {
     // Default to first staff; prefer using getStaffIndexFromY() and staffStepToY() for accuracy.
     const lines0 = getStaffLines(0);
@@ -1740,7 +1728,6 @@ document.addEventListener('click', function (e) {
         hideClearConfirmTooltip();
     }
 });
-document.getElementById('undo-btn').addEventListener('click', undo);
 document.getElementById('clef-select').addEventListener('change', changeClef);
 document.getElementById('key-select').addEventListener('change', changeKey);
 
