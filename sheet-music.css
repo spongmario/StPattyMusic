@@ -143,6 +143,24 @@ h1 {
     margin-bottom: 20px;
 }
 
+/* Add line button at bottom of staff area — signals "ran out of space, add another staff" */
+.add-line-footer {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    padding: 20px 0 24px;
+    margin-top: 8px;
+    border-top: 1px dashed rgba(122, 144, 112, 0.35);
+    position: relative;
+    z-index: 1;
+}
+
+.add-line-footer .btn {
+    padding: 14px 32px;
+    font-size: 16px;
+    font-weight: 600;
+}
+
 /* Note type bar — right above the staff; shows each note with its number key (1–5) */
 .note-type-bar {
     display: flex;
