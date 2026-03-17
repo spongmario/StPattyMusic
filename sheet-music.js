@@ -481,10 +481,15 @@ function ensureLyricsOverlays() {
         const ta = document.createElement('textarea');
         ta.className = 'lyrics-inline-input';
         ta.placeholder = 'Type lyrics here…';
+        ta.setAttribute('autocomplete', 'off');
+        ta.setAttribute('autocorrect', 'off');
+        ta.setAttribute('autocapitalize', 'off');
+        ta.setAttribute('spellcheck', 'false');
         ta.dataset.staffIndex = String(lyricsOverlaysContainer.children.length);
         overlay.appendChild(ta);
         lyricsOverlaysContainer.appendChild(overlay);
         addLyricsTextareaKeydown(ta);
+        addLyricsTextareaInputFilter(ta);
     }
     for (let i = 0; i < staffCount; i++) {
         const overlay = lyricsOverlaysContainer.children[i];
@@ -495,6 +500,7 @@ function ensureLyricsOverlays() {
         overlay.style.width = r.width + 'px';
         overlay.style.height = r.height + 'px';
         ta.value = lines[i] || '';
+        if (ta._lastLyricsValue !== undefined) ta._lastLyricsValue = ta.value;
         ta.dataset.staffIndex = String(i);
     }
 }
@@ -1791,6 +1797,7 @@ function addLyricsTextareaKeydown(ta) {
             const after = ta.value.slice(end);
             ta.value = before + ' ' + after;
             ta.selectionStart = ta.selectionEnd = start + 1;
+            ta._lastLyricsValue = ta.value;
             return;
         }
         if (e.key === 'Tab') {
@@ -1805,6 +1812,23 @@ function addLyricsTextareaKeydown(ta) {
             return;
         }
     });
+}
+
+// Undo browser-inserted period after space (e.g. smart punctuation / autocorrect).
+function addLyricsTextareaInputFilter(ta) {
+    ta._lastLyricsValue = ta.value;
+    ta.addEventListener('input', () => {
+        const value = ta.value;
+        const prev = ta._lastLyricsValue;
+        // If the only change is that a trailing space became ". " (browser inserted period), revert it.
+        if (value.length === prev.length + 1 && value.endsWith('. ') && prev.endsWith(' ') && value.slice(0, -2) === prev.slice(0, -1)) {
+            ta.value = prev.slice(0, -1) + ' ';
+            ta.selectionStart = ta.selectionEnd = ta.value.length;
+        }
+        ta._lastLyricsValue = ta.value;
+    });
+    // Store value before any key so we can detect browser-added period in input.
+    ta.addEventListener('keydown', () => { ta._lastLyricsValue = ta.value; }, true);
 }
 
 if (popupSharpBtn) {
