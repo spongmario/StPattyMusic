@@ -416,6 +416,43 @@ h1 {
     pointer-events: auto;
 }
 
+/* Drag handle over the dashed lyrics line (staff 0) – always on top so it receives events */
+.lyrics-line-drag-handle {
+    position: absolute;
+    left: 50px;
+    top: 0;
+    width: calc(100% - 100px);
+    box-sizing: border-box;
+    cursor: grab;
+    pointer-events: auto;
+    display: flex;
+    align-items: center;
+    justify-content: flex-start;
+    padding-left: 4px;
+    z-index: 2;
+}
+
+.lyrics-line-drag-handle:active,
+.lyrics-line-drag-handle.dragging {
+    cursor: grabbing;
+}
+
+.lyrics-line-drag-handle.hidden {
+    display: none;
+}
+
+.lyrics-drag-icon {
+    font-size: 14px;
+    color: #7a9070;
+    opacity: 0.85;
+    user-select: none;
+    pointer-events: none;
+}
+
+.lyrics-line-drag-handle:hover .lyrics-drag-icon {
+    opacity: 1;
+}
+
 .lyrics-inline-input {
     flex: 1;
     min-height: 60px;

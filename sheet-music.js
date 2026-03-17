@@ -1,6 +1,7 @@
 // Sheet Music Creator
 const canvas = document.getElementById('sheet-music-canvas');
 const ctx = canvas.getContext('2d');
+const lyricsLineDragHandle = document.getElementById('lyrics-line-drag-handle');
 
 // Canvas dimensions
 const STAFF_WIDTH = 1400;
@@ -49,6 +50,7 @@ function resizeCanvas() {
     // Extra padding for ledger lines + hover
     canvas.height = Math.max(400, bottomOfLastStaff + 140);
     if (isLyricsEditMode) positionLyricsOverlay();
+    // Don't call positionLyricsLineDragHandle here — it uses LYRICS_LINE_DRAG_THRESHOLD which isn't defined yet on first run. Redraw will position it.
 }
 
 // Convert a staff "step" to a canvas Y coordinate.
@@ -500,6 +502,25 @@ function ensureLyricsOverlays() {
 function positionLyricsOverlay() {
     if (!isLyricsEditMode || !lyricsOverlaysContainer) return;
     ensureLyricsOverlays();
+}
+
+// Position and show/hide the lyrics line drag handle (over the dashed line for staff 0).
+function positionLyricsLineDragHandle() {
+    if (!lyricsLineDragHandle) return;
+    if (isLyricsEditMode) {
+        lyricsLineDragHandle.classList.add('hidden');
+        lyricsLineDragHandle.setAttribute('aria-hidden', 'true');
+        return;
+    }
+    const baselineY = getLyricsBaselineY(0);
+    const top = baselineY - LYRICS_LINE_DRAG_THRESHOLD;
+    const height = LYRICS_LINE_DRAG_THRESHOLD * 2;
+    lyricsLineDragHandle.style.left = '50px';
+    lyricsLineDragHandle.style.top = top + 'px';
+    lyricsLineDragHandle.style.width = (STAFF_WIDTH - 100) + 'px';
+    lyricsLineDragHandle.style.height = height + 'px';
+    lyricsLineDragHandle.classList.remove('hidden');
+    lyricsLineDragHandle.setAttribute('aria-hidden', 'false');
 }
 
 // Measure text width using a hidden span; copy textarea's computed font so it matches exactly.
@@ -1028,6 +1049,8 @@ function redraw() {
         );
         ctx.restore();
     }
+
+    if (!isLyricsEditMode) positionLyricsLineDragHandle();
 }
 
 // Get key signature width (for note placement)
@@ -1483,16 +1506,18 @@ canvas.addEventListener('click', (e) => {
     }
 });
 
-// Start dragging the lyrics line (staff 0) when mousedown on the dashed line
-canvas.addEventListener('mousedown', (e) => {
-    if (isLyricsEditMode) return;
-    const { x, y } = canvasCoordsFromEvent(e);
-    if (!isPointOnLyricsLine(x, y)) return;
-    e.preventDefault();
-    draggingLyricsLine = true;
-    lyricsDragStartY = y;
-    lyricsDragStartOffset = lyricsLineOffset;
-});
+// Start dragging the lyrics line when mousedown on the dedicated drag handle (so it's never blocked)
+if (lyricsLineDragHandle) {
+    lyricsLineDragHandle.addEventListener('mousedown', (e) => {
+        e.preventDefault();
+        const rect = canvas.getBoundingClientRect();
+        const scaleY = canvas.height / rect.height;
+        draggingLyricsLine = true;
+        lyricsDragStartY = (e.clientY - rect.top) * scaleY;
+        lyricsDragStartOffset = lyricsLineOffset;
+        lyricsLineDragHandle.classList.add('dragging');
+    });
+}
 
 document.addEventListener('mousemove', (e) => {
     if (!draggingLyricsLine) return;
@@ -1503,12 +1528,14 @@ document.addEventListener('mousemove', (e) => {
     lyricsLineOffset = Math.max(LYRICS_LINE_OFFSET_MIN, Math.min(LYRICS_LINE_OFFSET_MAX, lyricsDragStartOffset + delta));
     redraw();
     if (isLyricsEditMode) positionLyricsOverlay();
+    else positionLyricsLineDragHandle();
 });
 
 document.addEventListener('mouseup', () => {
     if (draggingLyricsLine) {
         justFinishedDraggingLyrics = true;
         draggingLyricsLine = false;
+        if (lyricsLineDragHandle) lyricsLineDragHandle.classList.remove('dragging');
     }
 });
 
@@ -1696,6 +1723,10 @@ function toggleLyricsMode() {
             ensureLyricsOverlays();
             lyricsOverlaysContainer.classList.remove('hidden');
             lyricsOverlaysContainer.setAttribute('aria-hidden', 'false');
+            if (lyricsLineDragHandle) {
+                lyricsLineDragHandle.classList.add('hidden');
+                lyricsLineDragHandle.setAttribute('aria-hidden', 'true');
+            }
             const firstTa = getLyricsTextareaForStaff(0);
             if (firstTa) setTimeout(() => firstTa.focus(), 0);
         } else {
@@ -1707,6 +1738,7 @@ function toggleLyricsMode() {
             lyricsText = lines.join('\n');
             lyricsOverlaysContainer.classList.add('hidden');
             lyricsOverlaysContainer.setAttribute('aria-hidden', 'true');
+            positionLyricsLineDragHandle();
         }
     }
     updateLyricsButton();
