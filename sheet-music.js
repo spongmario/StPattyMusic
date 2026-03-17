@@ -233,6 +233,9 @@ let hoveredPlacement = null; // { x, staffIndex, step, y, note, octave, duration
 let selectedNoteId = null;
 let nextNoteId = 1;
 
+// Selected note duration (set by Note shortcut bar or keys 1–5)
+let currentDuration = 'quarter';
+
 // Set initial canvas size
 resizeCanvas();
 
@@ -983,8 +986,7 @@ function getKeySignatureWidth() {
 
 // Add note at position
 function addNoteFromPlacement(placement) {
-    const durationSelect = document.getElementById('duration-select');
-    const duration = durationSelect.value;
+    const duration = currentDuration;
     
     // Get minimum X position (after key signature)
     const minX = getKeySignatureWidth();
@@ -1178,7 +1180,7 @@ function updateHoverFromEvent(e) {
         return;
     }
 
-    const duration = document.getElementById('duration-select').value;
+    const duration = currentDuration;
     hoveredPlacement = {
         x: snappedX,
         staffIndex,
@@ -1197,11 +1199,31 @@ canvas.addEventListener('mouseleave', () => {
     redraw();
 });
 
-// If the user changes duration while hovering, refresh preview
-document.getElementById('duration-select').addEventListener('change', () => {
-    if (!hoveredPlacement) return;
-    hoveredPlacement.duration = document.getElementById('duration-select').value;
-    redraw();
+// Set duration from Note shortcut bar or keys 1–5; update hover preview
+function setDuration(value) {
+    currentDuration = value;
+    document.querySelectorAll('.note-type-btn').forEach(btn => {
+        btn.classList.toggle('note-type-btn-active', btn.dataset.duration === value);
+    });
+    if (hoveredPlacement) {
+        hoveredPlacement.duration = value;
+        redraw();
+    }
+}
+
+// Note shortcut bar (right above staff)
+document.querySelectorAll('.note-type-btn').forEach(btn => {
+    btn.addEventListener('click', () => setDuration(btn.dataset.duration));
+});
+
+// Keyboard shortcuts 1–5 for duration (when not typing in an input)
+document.addEventListener('keydown', (e) => {
+    if (/^(input|textarea)$/i.test(document.activeElement?.tagName)) return;
+    const map = { '1': 'whole', '2': 'half', '3': 'quarter', '4': 'eighth', '5': 'sixteenth' };
+    if (map[e.key]) {
+        setDuration(map[e.key]);
+        e.preventDefault();
+    }
 });
 
 // Convert mouse position from display coords to canvas (internal) coords (handles scaling)

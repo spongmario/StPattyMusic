@@ -6,6 +6,7 @@
     <title>Sheet Music Creator</title>
     <link rel="icon" type="image/svg+xml" href="favicon.svg">
     <link rel="stylesheet" href="sheet-music.css">
+    <link href="https://fonts.googleapis.com/css2?family=Noto+Music&display=swap" rel="stylesheet">
 </head>
 <body>
     <div class="container">
@@ -50,17 +51,6 @@
                 </button>
             </div>
             
-            <div class="toolbar-section">
-                <label for="duration-select">Duration:</label>
-                <select id="duration-select">
-                    <option value="whole">Whole Note</option>
-                    <option value="half">Half Note</option>
-                    <option value="quarter" selected>Quarter Note</option>
-                    <option value="eighth">Eighth Note</option>
-                    <option value="sixteenth">Sixteenth Note</option>
-                </select>
-            </div>
-            
             <div class="toolbar-section toolbar-row-start">
                 <button id="add-title-btn" class="btn btn-secondary" type="button" title="Add or edit the title of the sheet music">Add Title</button>
                 <button id="toggle-lyrics-btn" class="btn btn-secondary" type="button" title="Add or edit lyrics in a text field below the staff">Add Lyrics</button>
@@ -82,6 +72,14 @@
         </div>
         
         <div class="sheet-music-container">
+            <div class="note-type-bar" aria-label="Note shortcut">
+                <span class="note-type-bar-label">Note shortcut:</span>
+                <button type="button" class="note-type-btn" data-duration="whole" title="Whole note"><span class="note-type-symbol" aria-hidden="true">𝅝</span><span class="note-type-key">1</span></button>
+                <button type="button" class="note-type-btn" data-duration="half" title="Half note"><span class="note-type-symbol" aria-hidden="true">𝅗𝅥</span><span class="note-type-key">2</span></button>
+                <button type="button" class="note-type-btn note-type-btn-active" data-duration="quarter" title="Quarter note"><span class="note-type-symbol" aria-hidden="true">𝅘𝅥</span><span class="note-type-key">3</span></button>
+                <button type="button" class="note-type-btn" data-duration="eighth" title="Eighth note"><span class="note-type-symbol" aria-hidden="true">𝅘𝅥𝅮</span><span class="note-type-key">4</span></button>
+                <button type="button" class="note-type-btn" data-duration="sixteenth" title="Sixteenth note"><span class="note-type-symbol" aria-hidden="true">𝅘𝅥𝅯</span><span class="note-type-key">5</span></button>
+            </div>
             <div class="sheet-music-canvas-wrapper">
                 <canvas id="sheet-music-canvas"></canvas>
                 <div id="lyrics-overlay" class="lyrics-overlay hidden" aria-hidden="true">
@@ -105,7 +103,7 @@
         </div>
 
         <div class="instructions">
-            <p><strong>Instructions:</strong> Hover over the staff to preview placement, then click to place a note. Notes automatically use the key signature (sharps/flats). Use the Duration dropdown to choose note type. To edit a note, click <strong>Edit note</strong>, then click the note you want to change and choose ♯/♮/♭ or delete from the popup.</p>
+            <p><strong>Instructions:</strong> Hover over the staff to preview placement, then click to place a note. Notes automatically use the key signature (sharps/flats). Change note type with the <strong>Note shortcut</strong> bar above the staff; each button shows the note and its number key (1–5). To edit a note, click <strong>Edit note</strong>, then click the note and choose ♯/♮/♭ or delete from the popup.</p>
         </div>
     </div>
     

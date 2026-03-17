@@ -143,6 +143,80 @@ h1 {
     margin-bottom: 20px;
 }
 
+/* Note type bar — right above the staff; shows each note with its number key (1–5) */
+.note-type-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 12px;
+    padding: 8px 12px;
+    background: #f4f0e8;
+    border-radius: 10px;
+    border: 1px solid rgba(122, 144, 112, 0.3);
+    width: fit-content;
+}
+
+.note-type-bar-label {
+    font-size: 13px;
+    font-weight: 500;
+    color: #6b7d5a;
+    margin-right: 4px;
+}
+
+.note-type-btn {
+    width: 52px;
+    height: 44px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 2px;
+    border: 2px solid rgba(122, 144, 112, 0.4);
+    border-radius: 8px;
+    background: white;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    color: #333;
+    padding: 4px 6px;
+}
+
+.note-type-symbol {
+    font-family: "Noto Music", "Segoe UI Symbol", sans-serif;
+    font-size: 24px;
+    line-height: 1;
+}
+
+.note-type-key {
+    font-size: 11px;
+    font-weight: 600;
+    color: #6b7d5a;
+}
+
+.note-type-btn:hover {
+    border-color: #7a9070;
+    background: #faf8f4;
+    transform: translateY(-1px);
+}
+
+.note-type-btn:hover .note-type-key {
+    color: #5d6d4d;
+}
+
+.note-type-btn.note-type-btn-active {
+    background: #7a9070;
+    border-color: #6b7d5a;
+    color: white;
+}
+
+.note-type-btn.note-type-btn-active .note-type-symbol,
+.note-type-btn.note-type-btn-active .note-type-key {
+    color: white;
+}
+
+.note-type-btn.note-type-btn-active:hover {
+    background: #6b7d5a;
+}
+
 #sheet-music-canvas {
     display: block;
     margin: 0 auto;
