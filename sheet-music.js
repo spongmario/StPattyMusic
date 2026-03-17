@@ -1466,7 +1466,15 @@ document.addEventListener('keydown', (e) => {
     if (/^(input|textarea)$/i.test(document.activeElement?.tagName)) return;
     const map = { '1': 'whole', '2': 'half', '3': 'quarter', '4': 'eighth', '5': 'sixteenth' };
     if (map[e.key]) {
-        setDuration(map[e.key]);
+        const duration = map[e.key];
+        const selected = getSelectedNote ? getSelectedNote() : null;
+        if (selected) {
+            selected.duration = duration;
+            pushHistory();
+            redraw();
+        } else {
+            setDuration(duration);
+        }
         e.preventDefault();
     }
 });
