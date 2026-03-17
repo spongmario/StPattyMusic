@@ -20,6 +20,15 @@ const SYSTEM_SPACING = 220; // vertical distance between staff systems (top-to-t
 let isLyricsEditMode = false;
 let lyricsText = '';
 
+// Manual vertical offset for the lyrics line (pixels). Positive = lower, negative = higher.
+let lyricsLineOffset = 0;
+const LYRICS_LINE_OFFSET_MIN = -80;
+const LYRICS_LINE_OFFSET_MAX = 120;
+let draggingLyricsLine = false;
+let lyricsDragStartY = 0;
+let lyricsDragStartOffset = 0;
+let justFinishedDraggingLyrics = false;
+
 function getStaffTop(staffIndex) {
     return STAFF_TOP + staffIndex * SYSTEM_SPACING;
 }
@@ -390,11 +399,16 @@ function drawStaff(staffIndex) {
     drawKeySignature(staffIndex);
 }
 
+// Baseline Y for the lyrics line under a staff (staff 0 uses lyricsLineOffset for manual positioning).
+function getLyricsBaselineY(staffIndex) {
+    const STAFF_LINES = getStaffLines(staffIndex);
+    const base = STAFF_LINES[4] + STAFF_SPACING * 1.2;
+    return staffIndex === 0 ? base + lyricsLineOffset : base;
+}
+
 // Draw the horizontal guideline where lyrics will sit under this staff
 function drawLyricsLine(staffIndex) {
-    const STAFF_LINES = getStaffLines(staffIndex);
-    // Place lyrics close under the staff, visually "next to" the first line of notes
-    const baselineY = STAFF_LINES[4] + STAFF_SPACING * 1.2;
+    const baselineY = getLyricsBaselineY(staffIndex);
     ctx.save();
     ctx.strokeStyle = '#bbb';
     ctx.lineWidth = 1;
@@ -411,8 +425,7 @@ function drawLyricsLine(staffIndex) {
 function drawLyricsForStaff(staffIndex) {
     if (staffIndex !== 0 || isLyricsEditMode) return;
     if (!lyricsText || lyricsText.trim() === '') return;
-    const STAFF_LINES = getStaffLines(0);
-    const startY = STAFF_LINES[4] + STAFF_SPACING * 1.2;
+    const startY = getLyricsBaselineY(0);
     const lineHeight = 20;
     const lines = lyricsText.split('\n');
     if (lines.length === 0) return;
@@ -430,12 +443,20 @@ function drawLyricsForStaff(staffIndex) {
 
 // Bounds (in canvas pixels) for the lyrics zone under the first staff
 function getLyricsOverlayRect() {
-    const STAFF_LINES = getStaffLines(0);
-    const top = STAFF_LINES[4] + STAFF_SPACING * 0.5;
+    const baselineY = getLyricsBaselineY(0);
+    const top = baselineY - STAFF_SPACING * 0.7;
     const left = getKeySignatureWidth() + 8;
     const width = STAFF_WIDTH - left - 24;
     const height = 88;
     return { left, top, width, height };
+}
+
+// Hit test for the draggable lyrics line (staff 0 only). Used for drag and cursor.
+const LYRICS_LINE_DRAG_THRESHOLD = 12;
+function isPointOnLyricsLine(x, y) {
+    const baselineY = getLyricsBaselineY(0);
+    if (y < baselineY - LYRICS_LINE_DRAG_THRESHOLD || y > baselineY + LYRICS_LINE_DRAG_THRESHOLD) return false;
+    return x >= 50 && x <= STAFF_WIDTH - 50;
 }
 
 function positionLyricsOverlay() {
@@ -1149,13 +1170,24 @@ function hitTestNote(canvasX, canvasY) {
 }
 
 function updateHoverFromEvent(e) {
+    if (draggingLyricsLine) return;
     const { x, y } = canvasCoordsFromEvent(e);
     const staffIndex = getStaffIndexFromY(y);
     if (staffIndex === null) {
         hoveredPlacement = null;
+        canvas.style.cursor = '';
         redraw();
         return;
     }
+
+    // When not in edit mode, hovering over the lyrics line shows drag cursor and no note preview
+    if (!isEditMode && !isLyricsEditMode && isPointOnLyricsLine(x, y)) {
+        hoveredPlacement = null;
+        canvas.style.cursor = 'ns-resize';
+        redraw();
+        return;
+    }
+    canvas.style.cursor = '';
 
     // In edit modes, we don't show a placement preview; instead, highlight
     // the note under the cursor (if any) for a clear visual target.
@@ -1196,6 +1228,7 @@ function updateHoverFromEvent(e) {
 canvas.addEventListener('mousemove', updateHoverFromEvent);
 canvas.addEventListener('mouseleave', () => {
     hoveredPlacement = null;
+    canvas.style.cursor = '';
     redraw();
 });
 
@@ -1261,6 +1294,11 @@ document.addEventListener('click', handleLyricsSnapClick, true);
 canvas.addEventListener('click', (e) => {
     if (isLyricsEditMode) return; // snap already handled by document capture
     const { x, y } = canvasCoordsFromEvent(e);
+    if (justFinishedDraggingLyrics) {
+        justFinishedDraggingLyrics = false;
+        return;
+    }
+    if (!isEditMode && isPointOnLyricsLine(x, y)) return; // don't place a note when clicking the lyrics line
     const staffIndex = getStaffIndexFromY(y);
     if (staffIndex === null) return;
 
@@ -1275,6 +1313,35 @@ canvas.addEventListener('click', (e) => {
     if (!hit && hoveredPlacement) {
         selectedNoteId = null;
         addNoteFromPlacement(hoveredPlacement);
+    }
+});
+
+// Start dragging the lyrics line (staff 0) when mousedown on the dashed line
+canvas.addEventListener('mousedown', (e) => {
+    if (isLyricsEditMode) return;
+    const { x, y } = canvasCoordsFromEvent(e);
+    if (!isPointOnLyricsLine(x, y)) return;
+    e.preventDefault();
+    draggingLyricsLine = true;
+    lyricsDragStartY = y;
+    lyricsDragStartOffset = lyricsLineOffset;
+});
+
+document.addEventListener('mousemove', (e) => {
+    if (!draggingLyricsLine) return;
+    const rect = canvas.getBoundingClientRect();
+    const scaleY = canvas.height / rect.height;
+    const currentY = (e.clientY - rect.top) * scaleY;
+    const delta = currentY - lyricsDragStartY;
+    lyricsLineOffset = Math.max(LYRICS_LINE_OFFSET_MIN, Math.min(LYRICS_LINE_OFFSET_MAX, lyricsDragStartOffset + delta));
+    redraw();
+    if (isLyricsEditMode) positionLyricsOverlay();
+});
+
+document.addEventListener('mouseup', () => {
+    if (draggingLyricsLine) {
+        justFinishedDraggingLyrics = true;
+        draggingLyricsLine = false;
     }
 });
 
