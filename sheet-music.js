@@ -821,10 +821,11 @@ function computeBeamGroups(notesIn) {
         }
         const prev = current[current.length - 1];
         const dx = Math.abs(n.x - prev.x);
-        // Treat adjacent snapped columns as beam neighbors.
-        // Threshold slightly under 2 columns so beams still connect nicely
-        // even if spacing changes.
-        if (dx <= NOTE_COLUMN_WIDTH * 1.5) {
+        // Only beam notes of the same duration: 2–4 eighth notes or 2–4 sixteenth notes.
+        // Do not combine 8ths with 16ths in the same beam.
+        const sameDuration = n.duration === prev.duration;
+        const adjacent = dx <= NOTE_COLUMN_WIDTH * 1.5;
+        if (sameDuration && adjacent) {
             current.push(n);
         } else {
             groups.push(...splitBeamRunIntoGroups(current));
