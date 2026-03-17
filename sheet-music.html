@@ -46,9 +46,7 @@
             </div>
             
             <div class="toolbar-section">
-                <button id="edit-mode-btn" class="btn btn-secondary" type="button" title="Click, then click a note to edit it">
-                    Edit Note
-                </button>
+                <!-- Edit mode removed: click notes directly to select/drag/edit -->
             </div>
             
             <div class="toolbar-section toolbar-row-start">
@@ -109,21 +107,21 @@
         </div>
 
         <div id="note-edit-overlay" class="note-edit-overlay hidden" aria-hidden="true">
-            <div class="note-edit-dialog" role="dialog" aria-modal="true" aria-labelledby="note-edit-title">
+            <div class="note-edit-dialog note-edit-tooltip" role="dialog" aria-modal="false" aria-labelledby="note-edit-title">
                 <h2 id="note-edit-title">Edit Note</h2>
-                <p class="note-edit-subtitle">Choose how you want to change this note:</p>
+                <p class="note-edit-subtitle">Accidental:</p>
                 <div class="note-edit-actions">
-                    <button id="popup-sharp-btn" class="btn btn-secondary" type="button">♯ Sharp</button>
-                    <button id="popup-natural-btn" class="btn btn-secondary" type="button">♮ Natural</button>
-                    <button id="popup-flat-btn" class="btn btn-secondary" type="button">♭ Flat</button>
-                    <button id="popup-delete-btn" class="btn btn-secondary btn-danger" type="button">Delete Note</button>
+                    <button id="popup-sharp-btn" class="btn btn-secondary" type="button">♯</button>
+                    <button id="popup-natural-btn" class="btn btn-secondary" type="button">♮</button>
+                    <button id="popup-flat-btn" class="btn btn-secondary" type="button">♭</button>
+                    <button id="popup-delete-btn" class="btn btn-secondary btn-danger" type="button">Delete</button>
                 </div>
-                <button id="popup-cancel-btn" class="btn btn-light" type="button">Cancel</button>
+                <button id="popup-cancel-btn" class="btn btn-light" type="button">Close</button>
             </div>
         </div>
 
         <div class="instructions">
-            <p><strong>Instructions:</strong> Hover over the staff to preview placement, then click to place a note. Notes automatically use the key signature (sharps/flats). Change note type with the <strong>Note shortcut</strong> bar above the staff; each button shows the note and its number key (1–5). To edit a note, click <strong>Edit note</strong>, then click the note and choose ♯/♮/♭ or delete from the popup.</p>
+            <p><strong>Instructions:</strong> Hover over the staff to preview placement, then click to place a note. Notes automatically use the key signature (sharps/flats). Change note type with the <strong>Note shortcut</strong> bar above the staff; each button shows the note and its number key (1–5). To edit a note, click a note to select it (blue outline), then drag it up/down. Double‑click or right‑click a note to change ♯/♮/♭. Press Delete/Backspace to remove the selected note.</p>
         </div>
     </div>
     

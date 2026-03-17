@@ -339,10 +339,8 @@ h1 {
 .note-edit-overlay {
     position: fixed;
     inset: 0;
-    background: rgba(0, 0, 0, 0.4);
-    display: flex;
-    align-items: center;
-    justify-content: center;
+    background: transparent;
+    display: block;
     z-index: 1000;
 }
 
@@ -355,6 +353,7 @@ h1 {
     max-width: 360px;
     width: 100%;
     text-align: center;
+    position: absolute;
 }
 
 .note-edit-dialog h2 {
@@ -375,6 +374,18 @@ h1 {
     gap: 10px;
     justify-content: center;
     margin-bottom: 16px;
+}
+
+.note-edit-tooltip {
+    width: auto;
+    max-width: 280px;
+    padding: 14px 14px;
+    border-radius: 12px;
+}
+
+.note-edit-tooltip .note-edit-actions .btn {
+    padding: 8px 12px;
+    min-width: 44px;
 }
 
 .hidden {

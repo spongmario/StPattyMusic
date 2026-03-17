@@ -234,7 +234,7 @@ let noteHistory = [];
 let originalNotesBeforeConversion = null;
 
 // Edit mode state
-let isEditMode = false;
+// (Edit mode removed; notes are edited directly.)
 
 // Store title
 let sheetTitle = '';
@@ -242,7 +242,12 @@ let sheetTitle = '';
 // Hover preview + selection state
 let hoveredPlacement = null; // { x, staffIndex, step, y, note, octave, duration }
 let selectedNoteId = null;
+let hoveredNoteId = null;
 let nextNoteId = 1;
+
+// Note drag state
+let draggingNote = null; // { noteId, staffIndex, anchorOffsetY, didMove }
+let suppressNextClick = false;
 
 // Selected note duration (set by Note shortcut bar or keys 1–5)
 let currentDuration = 'quarter';
@@ -622,14 +627,14 @@ function drawNote(x, staffIndex, step, note, octave, duration, isSelected = fals
     
     // Draw note head: whole note = thick black oval with white hollow; half = stroke-only hollow; quarter and shorter = filled
     const isHollow = duration === 'whole' || duration === 'half';
-    const strokeColor = isSelected ? '#1f5fbf' : '#000';
-    const fillColor = isSelected ? '#1f5fbf' : '#000';
+    const strokeColor = '#000';
+    const fillColor = '#000';
 
     ctx.beginPath();
     ctx.ellipse(x, noteY, NOTE_WIDTH / 2, NOTE_HEIGHT / 2, 0, 0, 2 * Math.PI);
     if (duration === 'whole') {
         // Whole note: thick black oval with clear white hollow (match reference exactly)
-        ctx.fillStyle = isSelected ? '#1f5fbf' : '#000';
+        ctx.fillStyle = '#000';
         ctx.fill();
         ctx.fillStyle = '#fff';
         ctx.beginPath();
@@ -644,15 +649,7 @@ function drawNote(x, staffIndex, step, note, octave, duration, isSelected = fals
         ctx.fill();
     }
 
-    if (isSelected) {
-        ctx.save();
-        ctx.strokeStyle = '#1f5fbf';
-        ctx.lineWidth = 3;
-        ctx.beginPath();
-        ctx.ellipse(x, noteY, NOTE_WIDTH / 2 + 4, NOTE_HEIGHT / 2 + 4, 0, 0, 2 * Math.PI);
-        ctx.stroke();
-        ctx.restore();
-    } else if (isPreview) {
+    if (isPreview) {
         ctx.save();
         ctx.strokeStyle = '#000';
         ctx.lineWidth = 2;
@@ -1376,30 +1373,37 @@ function updateHoverFromEvent(e) {
     const staffIndex = getStaffIndexFromY(y);
     if (staffIndex === null) {
         hoveredPlacement = null;
+        hoveredNoteId = null;
         canvas.style.cursor = '';
         redraw();
         return;
     }
 
     // When not in edit mode, hovering over the lyrics line shows drag cursor and no note preview
-    if (!isEditMode && !isLyricsEditMode && isPointOnLyricsLine(x, y)) {
+    if (!isLyricsEditMode && isPointOnLyricsLine(x, y)) {
         hoveredPlacement = null;
+        hoveredNoteId = null;
         canvas.style.cursor = 'ns-resize';
         redraw();
         return;
     }
     canvas.style.cursor = '';
 
-    // In edit modes, we don't show a placement preview; instead, highlight
-    // the note under the cursor (if any) for a clear visual target.
-    if (isEditMode || isLyricsEditMode) {
+    // When lyrics mode is active, we keep note interactions for snapping only (handled elsewhere).
+    if (isLyricsEditMode) {
         hoveredPlacement = null;
-        const hit = hitTestNote(x, y);
-        const newSelectedId = hit ? hit.id : null;
-        if (newSelectedId !== selectedNoteId) {
-            selectedNoteId = newSelectedId;
-            redraw();
-        }
+        hoveredNoteId = null;
+        redraw();
+        return;
+    }
+
+    // Hovering over an existing note shows a pointer cursor and hides the placement preview.
+    const hit = hitTestNote(x, y);
+    hoveredNoteId = hit ? hit.id : null;
+    if (hit) {
+        hoveredPlacement = null;
+        canvas.style.cursor = draggingNote ? 'grabbing' : 'pointer';
+        redraw();
         return;
     }
 
@@ -1408,12 +1412,14 @@ function updateHoverFromEvent(e) {
     const snappedX = getSnappedXForCanvasX(x);
     if (isColumnOccupiedOnStaff(snappedX, staffIndex)) {
         hoveredPlacement = null;
+        hoveredNoteId = null;
         redraw();
         return;
     }
     const pitch = staffStepToPitch(step);
     if (!pitch) {
         hoveredPlacement = null;
+        hoveredNoteId = null;
         redraw();
         return;
     }
@@ -1502,27 +1508,154 @@ document.addEventListener('click', handleLyricsSnapClick, true);
 // Handle canvas click: in normal mode, place a note; in edit mode, open edit popup
 canvas.addEventListener('click', (e) => {
     if (isLyricsEditMode) return; // snap already handled by document capture
+    if (suppressNextClick) {
+        suppressNextClick = false;
+        return;
+    }
     const { x, y } = canvasCoordsFromEvent(e);
     if (justFinishedDraggingLyrics) {
         justFinishedDraggingLyrics = false;
         return;
     }
-    if (!isEditMode && isPointOnLyricsLine(x, y)) return; // don't place a note when clicking the lyrics line
+    if (isPointOnLyricsLine(x, y)) return; // don't place a note when clicking the lyrics line
     const staffIndex = getStaffIndexFromY(y);
     if (staffIndex === null) return;
 
     const hit = hitTestNote(x, y);
-    if (isEditMode) {
-        if (hit) {
-            openNoteEditPopup(hit.id);
-        }
+    if (hit) {
+        selectedNoteId = hit.id;
+        redraw();
         return;
     }
 
     if (!hit && hoveredPlacement) {
         selectedNoteId = null;
         addNoteFromPlacement(hoveredPlacement);
+    } else {
+        if (selectedNoteId) {
+            selectedNoteId = null;
+            redraw();
+        }
     }
+});
+
+function setNoteToKeySignaturePitch(noteObj, step) {
+    const pitch = staffStepToPitch(step);
+    if (!pitch) return false;
+    noteObj.step = step;
+    noteObj.y = staffStepToY(step, noteObj.staffIndex ?? 0);
+    noteObj.octave = pitch.octave;
+    noteObj.note = applyKeySignatureAccidental(pitch.letter);
+    noteObj.explicitAccidental = undefined;
+    return true;
+}
+
+function beginNoteDrag(noteId, canvasY) {
+    const n = notes.find(nn => nn.id === noteId);
+    if (!n) return;
+    selectedNoteId = noteId;
+    const staffIndex = n.staffIndex ?? 0;
+    const noteY = staffStepToY(n.step, staffIndex);
+    draggingNote = {
+        noteId,
+        staffIndex,
+        anchorOffsetY: canvasY - noteY,
+        didMove: false
+    };
+    canvas.style.cursor = 'grabbing';
+    redraw();
+}
+
+function updateNoteDragFromClientEvent(e) {
+    if (!draggingNote) return;
+    const { y } = canvasCoordsFromEvent(e);
+    const n = notes.find(nn => nn.id === draggingNote.noteId);
+    if (!n) return;
+    const staffIndex = draggingNote.staffIndex;
+    const lines = getStaffLines(staffIndex);
+    const targetY = y - draggingNote.anchorOffsetY;
+    const step = Math.round((lines[4] - targetY) / (STAFF_SPACING / 2));
+    if (typeof step !== 'number') return;
+    if (step === n.step) return;
+    if (setNoteToKeySignaturePitch(n, step)) {
+        draggingNote.didMove = true;
+        redraw();
+    }
+}
+
+function endNoteDrag() {
+    if (!draggingNote) return;
+    const didMove = draggingNote.didMove;
+    draggingNote = null;
+    canvas.style.cursor = '';
+    if (didMove) {
+        pushHistory();
+        suppressNextClick = true;
+    }
+    redraw();
+}
+
+canvas.addEventListener('mousedown', (e) => {
+    if (isLyricsEditMode) return;
+    if (e.button !== 0) return; // left only
+    const { x, y } = canvasCoordsFromEvent(e);
+    if (justFinishedDraggingLyrics) return;
+    const hit = hitTestNote(x, y);
+    if (!hit) return;
+    e.preventDefault();
+    beginNoteDrag(hit.id, y);
+});
+
+document.addEventListener('mousemove', (e) => {
+    if (!draggingNote) return;
+    updateNoteDragFromClientEvent(e);
+});
+
+document.addEventListener('mouseup', () => {
+    if (!draggingNote) return;
+    endNoteDrag();
+});
+
+function openNoteEditPopupAtClientPoint(noteId, clientX, clientY) {
+    selectedNoteId = noteId;
+    if (!noteEditOverlay) return;
+    const dialog = noteEditOverlay.querySelector('.note-edit-dialog');
+    if (dialog) {
+        const pad = 12;
+        const vw = window.innerWidth;
+        const vh = window.innerHeight;
+        // Make visible to measure.
+        noteEditOverlay.classList.remove('hidden');
+        noteEditOverlay.setAttribute('aria-hidden', 'false');
+        const rect = dialog.getBoundingClientRect();
+        const w = rect.width || 260;
+        const h = rect.height || 160;
+        const left = Math.max(pad, Math.min(vw - w - pad, clientX + 10));
+        const top = Math.max(pad, Math.min(vh - h - pad, clientY + 10));
+        dialog.style.left = left + 'px';
+        dialog.style.top = top + 'px';
+        return;
+    }
+    noteEditOverlay.classList.remove('hidden');
+    noteEditOverlay.setAttribute('aria-hidden', 'false');
+}
+
+canvas.addEventListener('dblclick', (e) => {
+    if (isLyricsEditMode) return;
+    const { x, y } = canvasCoordsFromEvent(e);
+    const hit = hitTestNote(x, y);
+    if (!hit) return;
+    e.preventDefault();
+    openNoteEditPopupAtClientPoint(hit.id, e.clientX, e.clientY);
+});
+
+canvas.addEventListener('contextmenu', (e) => {
+    if (isLyricsEditMode) return;
+    const { x, y } = canvasCoordsFromEvent(e);
+    const hit = hitTestNote(x, y);
+    if (!hit) return;
+    e.preventDefault();
+    openNoteEditPopupAtClientPoint(hit.id, e.clientX, e.clientY);
 });
 
 // Start dragging the lyrics line when mousedown on the dedicated drag handle (so it's never blocked)
@@ -1701,8 +1834,7 @@ function deleteSelectedNote() {
     redraw();
 }
 
-// Popup-based edit flow
-const editModeBtn = document.getElementById('edit-mode-btn');
+// Tooltip-based accidental edit flow
 const noteEditOverlay = document.getElementById('note-edit-overlay');
 const popupSharpBtn = document.getElementById('popup-sharp-btn');
 const popupFlatBtn = document.getElementById('popup-flat-btn');
@@ -1711,17 +1843,6 @@ const popupDeleteBtn = document.getElementById('popup-delete-btn');
 const popupCancelBtn = document.getElementById('popup-cancel-btn');
 const toggleLyricsBtn = document.getElementById('toggle-lyrics-btn');
 const lyricsOverlaysContainer = document.getElementById('lyrics-overlays-container');
-
-function updateEditModeButton() {
-    if (!editModeBtn) return;
-    if (isEditMode) {
-        editModeBtn.classList.add('btn-edit-active');
-        editModeBtn.textContent = 'Finish Editing';
-    } else {
-        editModeBtn.classList.remove('btn-edit-active');
-        editModeBtn.textContent = 'Edit Note';
-    }
-}
 
 function updateLyricsButton() {
     if (!toggleLyricsBtn) return;
@@ -1764,11 +1885,6 @@ function toggleLyricsMode() {
     redraw();
 }
 
-function toggleEditMode() {
-    isEditMode = !isEditMode;
-    updateEditModeButton();
-}
-
 function openNoteEditPopup(noteId) {
     selectedNoteId = noteId;
     if (!noteEditOverlay) return;
@@ -1780,10 +1896,6 @@ function closeNoteEditPopup() {
     if (!noteEditOverlay) return;
     noteEditOverlay.classList.add('hidden');
     noteEditOverlay.setAttribute('aria-hidden', 'true');
-}
-
-if (editModeBtn) {
-    editModeBtn.addEventListener('click', toggleEditMode);
 }
 
 if (toggleLyricsBtn) {
@@ -1886,6 +1998,17 @@ if (noteEditOverlay) {
         }
     });
 }
+
+// Keyboard delete/backspace removes selected note (when not typing)
+document.addEventListener('keydown', (e) => {
+    if (/^(input|textarea)$/i.test(document.activeElement?.tagName)) return;
+    if (e.key === 'Delete' || e.key === 'Backspace') {
+        if (selectedNoteId) {
+            e.preventDefault();
+            deleteSelectedNote();
+        }
+    }
+});
 
 function addLine() {
     staffCount += 1;
