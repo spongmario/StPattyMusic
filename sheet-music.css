@@ -273,6 +273,51 @@ h1 {
     box-shadow: 0 4px 8px rgba(135, 206, 235, 0.3);
 }
 
+.saved-song-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.saved-song-overlay.hidden {
+    display: none;
+}
+
+.saved-song-dialog {
+    background: #faf8f4;
+    border-radius: 16px;
+    padding: 24px 28px;
+    box-shadow: 0 18px 45px rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(122, 144, 112, 0.4);
+    max-width: 360px;
+    width: 100%;
+    text-align: center;
+}
+
+.saved-song-dialog h2 {
+    margin-bottom: 10px;
+    font-size: 20px;
+    color: #333;
+}
+
+.saved-song-text {
+    margin-bottom: 20px;
+    font-size: 14px;
+    color: #666;
+    line-height: 1.45;
+}
+
+.saved-song-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center;
+}
+
 .note-edit-overlay {
     position: fixed;
     inset: 0;

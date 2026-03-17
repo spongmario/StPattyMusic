@@ -1886,14 +1886,46 @@ pushHistory();
 // Initial draw
 redraw();
 
-// On load: offer to continue saved song from localStorage
+// Saved-song popup: show on load if we have saved data; Resume / Delete
+var savedSongOverlay = document.getElementById('saved-song-overlay');
+var savedSongData = null;
+
+function showSavedSongPopup(data) {
+    savedSongData = data;
+    if (savedSongOverlay) {
+        savedSongOverlay.classList.remove('hidden');
+        savedSongOverlay.setAttribute('aria-hidden', 'false');
+    }
+}
+
+function hideSavedSongPopup() {
+    savedSongData = null;
+    if (savedSongOverlay) {
+        savedSongOverlay.classList.add('hidden');
+        savedSongOverlay.setAttribute('aria-hidden', 'true');
+    }
+}
+
+document.getElementById('saved-song-resume-btn').addEventListener('click', function () {
+    if (savedSongData && loadState(savedSongData)) {
+        hideSavedSongPopup();
+    }
+});
+
+document.getElementById('saved-song-delete-btn').addEventListener('click', function () {
+    try {
+        localStorage.removeItem(SAVE_STORAGE_KEY);
+    } catch (e) { /* ignore */ }
+    hideSavedSongPopup();
+});
+
+// On load: show in-app popup if we have a saved song (Resume or Delete)
 (function () {
     try {
         var raw = localStorage.getItem(SAVE_STORAGE_KEY);
         if (!raw) return;
         var data = JSON.parse(raw);
         if (!data || data.version !== SAVE_VERSION) return;
-        if (!confirm('You have a saved song. Load it to continue where you left off?')) return;
-        loadState(data);
+        showSavedSongPopup(data);
     } catch (e) { /* ignore */ }
 })();
