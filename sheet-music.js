@@ -2326,6 +2326,7 @@ if (convertFlatsBtn) {
         if (overlay) {
             overlay.classList.remove('hidden');
             overlay.setAttribute('aria-hidden', 'false');
+            updateSavedSongPopupTextWithTitle();
         }
     } catch (e) { /* ignore */ }
 })();
@@ -2337,6 +2338,20 @@ pushHistory();
 redraw();
 
 var savedSongOverlay = document.getElementById('saved-song-overlay');
+
+function updateSavedSongPopupTextWithTitle() {
+    var titleEl = document.getElementById('saved-song-title');
+    var textEl = document.querySelector('.saved-song-text');
+    if (!titleEl && !textEl) return;
+
+    var title = savedSongData && typeof savedSongData.sheetTitle === 'string'
+        ? savedSongData.sheetTitle.trim()
+        : '';
+    if (!title) return; // No title: leave the popup exactly as-is.
+
+    if (titleEl) titleEl.textContent = 'Saved song: ' + title;
+    if (textEl) textEl.textContent = 'Your work on "' + title + '" was saved in this browser. Resume to continue, or delete to remove it and start fresh. New changes save automatically.';
+}
 
 function hideSavedSongPopup() {
     savedSongData = null;
