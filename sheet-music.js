@@ -1240,6 +1240,7 @@ function loadState(data) {
     if (clefSelect) clefSelect.value = currentClef;
     setDuration(currentDuration);
     resizeCanvas();
+    updateTitleButton();
     updateLyricsButton();
     updateFlatsButtonState();
     redraw();
@@ -2073,6 +2074,14 @@ const titleEditInput = document.getElementById('title-edit-input');
 const titleEditSaveBtn = document.getElementById('title-edit-save-btn');
 const titleEditCancelBtn = document.getElementById('title-edit-cancel-btn');
 
+function updateTitleButton() {
+    const btn = document.getElementById('add-title-btn');
+    if (!btn) return;
+    const hasTitle = !!(sheetTitle && sheetTitle.trim());
+    btn.textContent = hasTitle ? 'Edit Title' : 'Add Title';
+    btn.title = hasTitle ? 'Edit the title of the sheet music' : 'Add a title to the sheet music';
+}
+
 function openTitleEditDialog() {
     if (!titleEditOverlay || !titleEditInput) return;
     titleEditInput.value = sheetTitle || '';
@@ -2093,6 +2102,7 @@ function closeTitleEditDialog() {
 function commitTitleEdit() {
     if (!titleEditInput) return;
     sheetTitle = (titleEditInput.value || '').trim();
+    updateTitleButton();
     redraw();
     schedulePersistSheetToBrowser();
     closeTitleEditDialog();
@@ -2101,6 +2111,7 @@ function commitTitleEdit() {
 const addTitleBtn = document.getElementById('add-title-btn');
 if (addTitleBtn) {
     addTitleBtn.addEventListener('click', openTitleEditDialog);
+    updateTitleButton();
 }
 if (titleEditSaveBtn) {
     titleEditSaveBtn.addEventListener('click', commitTitleEdit);
