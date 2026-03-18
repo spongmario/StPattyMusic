@@ -618,9 +618,9 @@ h1 {
 }
 
 .clear-confirm-text {
-    font-size: 13px;
-    font-weight: 500;
-    color: #333;
+    font-size: 16px;
+    font-weight: 700;
+    color: #111;
     margin: 0 0 8px 0;
     white-space: nowrap;
 }
@@ -629,6 +629,28 @@ h1 {
     display: flex;
     justify-content: center;
     gap: 6px;
+}
+
+.clear-confirm-actions #clear-confirm-yes {
+    background: #c75050;
+    color: #fff;
+    border-radius: 6px;
+    padding: 6px 12px;
+}
+
+.clear-confirm-actions #clear-confirm-yes:hover {
+    background: #b24545;
+}
+
+.clear-confirm-actions #clear-confirm-no {
+    background: #6b7d5a;
+    color: #fff;
+    border-radius: 6px;
+    padding: 6px 12px;
+}
+
+.clear-confirm-actions #clear-confirm-no:hover {
+    background: #5d6d4d;
 }
 
 .clear-confirm-tooltip.hidden {
