@@ -1183,10 +1183,39 @@ function pushHistory() {
 
 // Clear all notes (called after user confirms in tooltip)
 function clearAll() {
+    // Reset musical content
     notes = [];
     noteHistory = [];
     selectedNoteId = null;
     hoveredPlacement = null;
+    originalNotesBeforeConversion = null;
+
+    // Reset title
+    sheetTitle = '';
+    updateTitleButton();
+
+    // Reset lyrics
+    lyricsText = '';
+    lyricsLineOffsets = [0];
+    isLyricsEditMode = false;
+    if (lyricsOverlaysContainer) {
+        lyricsOverlaysContainer.classList.add('hidden');
+        lyricsOverlaysContainer.setAttribute('aria-hidden', 'true');
+        lyricsOverlaysContainer.innerHTML = '';
+    }
+    updateLyricsButton();
+
+    // Reset staff layout to a single staff
+    staffCount = 1;
+    resizeCanvas();
+
+    // Reset key signature to default (C major)
+    currentKey = 'C';
+    const keySelect = document.getElementById('key-select');
+    if (keySelect) keySelect.value = currentKey;
+    updateFlatsButtonState();
+
+    // Redraw and persist cleared state
     redraw();
     schedulePersistSheetToBrowser();
 }
