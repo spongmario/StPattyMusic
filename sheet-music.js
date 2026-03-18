@@ -1226,8 +1226,6 @@ const SAVE_VERSION = 2;
 
 /** Non-null while "Resume or Delete?" dialog is showing (blocks overwriting save with empty canvas). */
 var savedSongData = null;
-/** 'always' after Resume/Open file (persist even when sheet cleared). 'content_only' = only when there is something to save. */
-var persistMode = 'content_only';
 
 function getStateForSave() {
     return {
@@ -1255,7 +1253,10 @@ function hasMeaningfulSheetState() {
 function persistSheetToBrowserNow() {
     if (savedSongData !== null) return;
     try {
-        var shouldWrite = persistMode === 'always' || hasMeaningfulSheetState();
+        // Only persist when there is real content (title and/or at least one placed note).
+        // This avoids creating "Saved song" drafts from UI-only changes like note-type selection
+        // or key signature changes.
+        var shouldWrite = hasMeaningfulSheetState();
         if (!shouldWrite) {
             if (localStorage.getItem(SAVE_STORAGE_KEY)) {
                 localStorage.removeItem(SAVE_STORAGE_KEY);
@@ -1341,7 +1342,6 @@ function openFromFile(file) {
         try {
             const data = JSON.parse(reader.result);
             if (loadState(data)) {
-                persistMode = 'always';
                 showSaveOpenMessage('Song loaded.');
             } else {
                 showSaveOpenMessage('Invalid or unsupported song file.', true);
@@ -2350,7 +2350,6 @@ document.getElementById('saved-song-resume-btn').addEventListener('click', funct
     if (!savedSongData) return;
     var data = savedSongData;
     savedSongData = null;
-    persistMode = 'always';
     hideSavedSongPopup();
     loadState(data);
 });
@@ -2359,7 +2358,6 @@ document.getElementById('saved-song-delete-btn').addEventListener('click', funct
     try {
         localStorage.removeItem(SAVE_STORAGE_KEY);
     } catch (e) { /* ignore */ }
-    persistMode = 'content_only';
     hideSavedSongPopup();
 });
 
