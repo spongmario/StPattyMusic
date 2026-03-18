@@ -558,8 +558,8 @@ h1 {
 }
 
 .lyrics-inline-input {
-    flex: 1;
-    min-height: 60px;
+    flex: 0 0 auto;
+    height: calc(1.4em + 10px);
     width: 100%;
     pointer-events: auto; /* textarea still receives focus and typing */
     padding: 4px 8px;
@@ -572,6 +572,8 @@ h1 {
     background: #faf8f4;
     resize: none;
     box-sizing: border-box;
+    overflow-y: hidden;
+    overflow-x: auto;
 }
 
 .lyrics-inline-input:focus {

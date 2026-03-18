@@ -502,6 +502,8 @@ function ensureLyricsOverlays() {
         overlay.className = 'lyrics-overlay';
         const ta = document.createElement('textarea');
         ta.className = 'lyrics-inline-input';
+        ta.rows = 1;
+        ta.wrap = 'off';
         ta.placeholder = 'Type lyrics here…';
         ta.setAttribute('autocomplete', 'off');
         ta.setAttribute('autocorrect', 'off');
