@@ -260,10 +260,12 @@ h1 {
 
 .btn-danger {
     background: #c75050;
+    color: #fff;
 }
 
 .btn-danger:hover {
     background: #b24545;
+    color: #fff;
 }
 
 .btn-edit-active {

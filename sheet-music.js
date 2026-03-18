@@ -1125,6 +1125,7 @@ function pushHistory() {
     if (noteHistory.length > 200) {
         noteHistory.shift();
     }
+    schedulePersistSheetToBrowser();
 }
 
 // Clear all notes (called after user confirms in tooltip)
@@ -1134,11 +1135,17 @@ function clearAll() {
     selectedNoteId = null;
     hoveredPlacement = null;
     redraw();
+    schedulePersistSheetToBrowser();
 }
 
 // --- Save / Open (localStorage + file) ---
 const SAVE_STORAGE_KEY = 'stpatty-sheet-music-project';
 const SAVE_VERSION = 1;
+
+/** Non-null while "Resume or Delete?" dialog is showing (blocks overwriting save with empty canvas). */
+var savedSongData = null;
+/** 'always' after Resume/Open file (persist even when sheet cleared). 'content_only' = only when there is something to save. */
+var persistMode = 'content_only';
 
 function getStateForSave() {
     return {
@@ -1152,6 +1159,39 @@ function getStateForSave() {
         currentDuration: currentDuration,
         notes: JSON.parse(JSON.stringify(notes))
     };
+}
+
+function hasMeaningfulSheetState() {
+    return notes.length > 0 ||
+        (sheetTitle && sheetTitle.trim()) ||
+        (lyricsText && lyricsText.trim()) ||
+        staffCount > 1 ||
+        currentKey !== 'C' ||
+        currentClef !== 'treble' ||
+        (currentDuration && currentDuration !== 'quarter');
+}
+
+function persistSheetToBrowserNow() {
+    if (savedSongData !== null) return;
+    try {
+        var shouldWrite = persistMode === 'always' || hasMeaningfulSheetState();
+        if (!shouldWrite) {
+            if (localStorage.getItem(SAVE_STORAGE_KEY)) {
+                localStorage.removeItem(SAVE_STORAGE_KEY);
+            }
+            return;
+        }
+        localStorage.setItem(SAVE_STORAGE_KEY, JSON.stringify(getStateForSave()));
+    } catch (e) { /* quota / private mode */ }
+}
+
+var _persistBrowserTimer = null;
+function schedulePersistSheetToBrowser() {
+    clearTimeout(_persistBrowserTimer);
+    _persistBrowserTimer = setTimeout(function () {
+        _persistBrowserTimer = null;
+        persistSheetToBrowserNow();
+    }, 400);
 }
 
 function loadState(data) {
@@ -1206,22 +1246,13 @@ function loadState(data) {
     return true;
 }
 
-function saveForLater() {
-    try {
-        const state = getStateForSave();
-        localStorage.setItem(SAVE_STORAGE_KEY, JSON.stringify(state));
-        showSaveOpenMessage('Saved for later. Come back anytime to continue.');
-    } catch (e) {
-        showSaveOpenMessage('Could not save (storage may be full or disabled).', true);
-    }
-}
-
 function openFromFile(file) {
     const reader = new FileReader();
     reader.onload = function () {
         try {
             const data = JSON.parse(reader.result);
             if (loadState(data)) {
+                persistMode = 'always';
                 showSaveOpenMessage('Song loaded.');
             } else {
                 showSaveOpenMessage('Invalid or unsupported song file.', true);
@@ -1457,6 +1488,7 @@ function setDuration(value) {
         hoveredPlacement.duration = value;
         redraw();
     }
+    schedulePersistSheetToBrowser();
 }
 
 // Note shortcut bar (right above staff)
@@ -1699,6 +1731,7 @@ document.addEventListener('mouseup', () => {
         justFinishedDraggingLyrics = true;
         draggingLyricsLine = false;
         if (lyricsLineDragHandle) lyricsLineDragHandle.classList.remove('dragging');
+        schedulePersistSheetToBrowser();
     }
 });
 
@@ -1711,6 +1744,7 @@ function changeClef() {
     selectedNoteId = null;
     hoveredPlacement = null;
     redraw();
+    schedulePersistSheetToBrowser();
 }
 
 // Handle key signature change
@@ -1725,6 +1759,7 @@ function changeKey() {
         }
     }
     redraw();
+    schedulePersistSheetToBrowser();
 }
 
 // Handle toolbar buttons
@@ -1794,8 +1829,7 @@ function exportToPDF() {
 
 document.getElementById('export-pdf-btn').addEventListener('click', exportToPDF);
 
-// Save for later / Open / Download
-document.getElementById('save-later-btn').addEventListener('click', saveForLater);
+// Open / Download (sheet auto-saves to this browser)
 document.getElementById('download-btn').addEventListener('click', downloadSongFile);
 var openFileInput = document.getElementById('open-file-input');
 document.getElementById('open-btn').addEventListener('click', function () {
@@ -1893,6 +1927,9 @@ function toggleLyricsMode() {
     }
     updateLyricsButton();
     redraw();
+    if (!isLyricsEditMode) {
+        schedulePersistSheetToBrowser();
+    }
 }
 
 function openNoteEditPopup(noteId) {
@@ -2025,6 +2062,7 @@ function addLine() {
     resizeCanvas();
     hoveredPlacement = null;
     redraw();
+    schedulePersistSheetToBrowser();
 }
 
 document.getElementById('add-line-btn').addEventListener('click', addLine);
@@ -2036,6 +2074,7 @@ function addTitle() {
     if (newTitle !== null) {
         sheetTitle = newTitle.trim();
         redraw();
+        schedulePersistSheetToBrowser();
     }
 }
 
@@ -2135,23 +2174,33 @@ if (convertFlatsBtn) {
     updateFlatsButtonState();
 }
 
+// If a song is on disk already, show Resume/Delete before touching the canvas (avoids wiping the save).
+(function runSavedSongStartup() {
+    try {
+        var raw = localStorage.getItem(SAVE_STORAGE_KEY);
+        if (!raw) {
+            return;
+        }
+        var data = JSON.parse(raw);
+        if (!data || data.version !== SAVE_VERSION) {
+            return;
+        }
+        savedSongData = data;
+        var overlay = document.getElementById('saved-song-overlay');
+        if (overlay) {
+            overlay.classList.remove('hidden');
+            overlay.setAttribute('aria-hidden', 'false');
+        }
+    } catch (e) { /* ignore */ }
+})();
+
 // Initialize history so undo works from first action
 pushHistory();
 
 // Initial draw
 redraw();
 
-// Saved-song popup: show on load if we have saved data; Resume / Delete
 var savedSongOverlay = document.getElementById('saved-song-overlay');
-var savedSongData = null;
-
-function showSavedSongPopup(data) {
-    savedSongData = data;
-    if (savedSongOverlay) {
-        savedSongOverlay.classList.remove('hidden');
-        savedSongOverlay.setAttribute('aria-hidden', 'false');
-    }
-}
 
 function hideSavedSongPopup() {
     savedSongData = null;
@@ -2162,25 +2211,25 @@ function hideSavedSongPopup() {
 }
 
 document.getElementById('saved-song-resume-btn').addEventListener('click', function () {
-    if (savedSongData && loadState(savedSongData)) {
-        hideSavedSongPopup();
-    }
+    if (!savedSongData) return;
+    var data = savedSongData;
+    savedSongData = null;
+    persistMode = 'always';
+    hideSavedSongPopup();
+    loadState(data);
 });
 
 document.getElementById('saved-song-delete-btn').addEventListener('click', function () {
     try {
         localStorage.removeItem(SAVE_STORAGE_KEY);
     } catch (e) { /* ignore */ }
+    persistMode = 'content_only';
     hideSavedSongPopup();
 });
 
-// On load: show in-app popup if we have a saved song (Resume or Delete)
-(function () {
-    try {
-        var raw = localStorage.getItem(SAVE_STORAGE_KEY);
-        if (!raw) return;
-        var data = JSON.parse(raw);
-        if (!data || data.version !== SAVE_VERSION) return;
-        showSavedSongPopup(data);
-    } catch (e) { /* ignore */ }
-})();
+window.addEventListener('beforeunload', function () {
+    persistSheetToBrowserNow();
+});
+window.addEventListener('pagehide', function () {
+    persistSheetToBrowserNow();
+});

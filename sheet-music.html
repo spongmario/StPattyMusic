@@ -74,7 +74,6 @@
                         </div>
                     </div>
                 </div>
-                <button id="save-later-btn" class="btn btn-secondary" type="button" title="Save this song in your browser to work on later">Save for later</button>
                 <button id="open-btn" class="btn btn-secondary" type="button" title="Open a previously saved song file">Open</button>
                 <input type="file" id="open-file-input" accept=".json,application/json" class="hidden" aria-hidden="true">
                 <button id="download-btn" class="btn btn-secondary" type="button" title="Download this song as a file to open later">Download</button>
@@ -100,10 +99,10 @@
         <div id="saved-song-overlay" class="saved-song-overlay hidden" aria-hidden="true">
             <div class="saved-song-dialog" role="dialog" aria-modal="true" aria-labelledby="saved-song-title">
                 <h2 id="saved-song-title">Saved song</h2>
-                <p class="saved-song-text">You have a saved song. Resume to continue where you left off, or delete to remove it and start fresh.</p>
+                <p class="saved-song-text">Your work was saved in this browser. Resume to continue, or delete to remove it and start fresh. New changes save automatically.</p>
                 <div class="saved-song-actions">
                     <button id="saved-song-resume-btn" class="btn btn-primary" type="button">Resume</button>
-                    <button id="saved-song-delete-btn" class="btn btn-secondary" type="button">Delete</button>
+                    <button id="saved-song-delete-btn" class="btn btn-danger" type="button">Delete</button>
                 </div>
             </div>
         </div>
