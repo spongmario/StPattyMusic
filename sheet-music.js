@@ -1215,14 +1215,12 @@ function getStateForSave() {
 }
 
 function hasMeaningfulSheetState() {
+    // Only treat the sheet as "meaningful" (and worth resuming later) if the
+    // user has actually added musical content: a title and/or at least one note.
+    // This avoids showing the "Saved song" prompt when they only changed
+    // settings like clef/key but never started real work.
     return notes.length > 0 ||
-        (sheetTitle && sheetTitle.trim()) ||
-        (lyricsText && lyricsText.trim()) ||
-        (Array.isArray(lyricsLineOffsets) && lyricsLineOffsets.some(v => Number(v) !== 0)) ||
-        staffCount > 1 ||
-        currentKey !== 'C' ||
-        currentClef !== 'treble' ||
-        (currentDuration && currentDuration !== 'quarter');
+        (sheetTitle && sheetTitle.trim());
 }
 
 function persistSheetToBrowserNow() {
