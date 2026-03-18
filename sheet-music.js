@@ -1592,7 +1592,11 @@ document.addEventListener('keydown', (e) => {
     if (map[e.key]) {
         const duration = map[e.key];
         const selected = getSelectedNote ? getSelectedNote() : null;
-        if (selected) {
+        // If we're hovering a placement preview (i.e., about to add a new note),
+        // keyboard duration shortcuts should control the preview/new note,
+        // not mutate the currently-selected existing note.
+        const editingSelectedNote = !!selected && !hoveredPlacement;
+        if (editingSelectedNote) {
             selected.duration = duration;
             pushHistory();
             redraw();
