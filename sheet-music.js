@@ -2067,18 +2067,63 @@ function addLine() {
 
 document.getElementById('add-line-btn').addEventListener('click', addLine);
 
-// Handle add title button
-function addTitle() {
-    const currentTitle = sheetTitle || '';
-    const newTitle = prompt('Enter the title for your sheet music:', currentTitle);
-    if (newTitle !== null) {
-        sheetTitle = newTitle.trim();
-        redraw();
-        schedulePersistSheetToBrowser();
-    }
+// Title edit dialog (avoid browser prompt; use in-app popup)
+const titleEditOverlay = document.getElementById('title-edit-overlay');
+const titleEditInput = document.getElementById('title-edit-input');
+const titleEditSaveBtn = document.getElementById('title-edit-save-btn');
+const titleEditCancelBtn = document.getElementById('title-edit-cancel-btn');
+
+function openTitleEditDialog() {
+    if (!titleEditOverlay || !titleEditInput) return;
+    titleEditInput.value = sheetTitle || '';
+    titleEditOverlay.classList.remove('hidden');
+    titleEditOverlay.setAttribute('aria-hidden', 'false');
+    setTimeout(() => {
+        titleEditInput.focus();
+        titleEditInput.select();
+    }, 0);
 }
 
-document.getElementById('add-title-btn').addEventListener('click', addTitle);
+function closeTitleEditDialog() {
+    if (!titleEditOverlay) return;
+    titleEditOverlay.classList.add('hidden');
+    titleEditOverlay.setAttribute('aria-hidden', 'true');
+}
+
+function commitTitleEdit() {
+    if (!titleEditInput) return;
+    sheetTitle = (titleEditInput.value || '').trim();
+    redraw();
+    schedulePersistSheetToBrowser();
+    closeTitleEditDialog();
+}
+
+const addTitleBtn = document.getElementById('add-title-btn');
+if (addTitleBtn) {
+    addTitleBtn.addEventListener('click', openTitleEditDialog);
+}
+if (titleEditSaveBtn) {
+    titleEditSaveBtn.addEventListener('click', commitTitleEdit);
+}
+if (titleEditCancelBtn) {
+    titleEditCancelBtn.addEventListener('click', closeTitleEditDialog);
+}
+if (titleEditOverlay) {
+    titleEditOverlay.addEventListener('click', (e) => {
+        if (e.target === titleEditOverlay) closeTitleEditDialog();
+    });
+}
+if (titleEditInput) {
+    titleEditInput.addEventListener('keydown', (e) => {
+        if (e.key === 'Enter') {
+            e.preventDefault();
+            commitTitleEdit();
+        } else if (e.key === 'Escape') {
+            e.preventDefault();
+            closeTitleEditDialog();
+        }
+    });
+}
 
 // Convert sharp note names to flat enharmonic equivalents (e.g. C# -> Db).
 // Covers the spellings used in flat keys like Bb, Db, Eb, Ab.

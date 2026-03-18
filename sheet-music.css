@@ -395,6 +395,61 @@ h1 {
     min-width: 44px;
 }
 
+.title-edit-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.4);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 1000;
+}
+
+.title-edit-overlay.hidden {
+    display: none;
+}
+
+.title-edit-dialog {
+    background: #faf8f4;
+    border-radius: 16px;
+    padding: 24px 28px;
+    box-shadow: 0 18px 45px rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(122, 144, 112, 0.4);
+    max-width: 420px;
+    width: min(420px, calc(100vw - 32px));
+    text-align: center;
+}
+
+.title-edit-dialog h2 {
+    margin-bottom: 14px;
+    font-size: 20px;
+    color: #333;
+}
+
+.title-edit-input {
+    width: 100%;
+    padding: 10px 12px;
+    border: 2px solid rgba(122, 144, 112, 0.55);
+    border-radius: 10px;
+    background: #fff;
+    color: #333;
+    font-size: 15px;
+}
+
+.title-edit-input:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.12);
+}
+
+.title-edit-actions {
+    display: flex;
+    gap: 12px;
+    justify-content: center;
+    margin-top: 16px;
+    flex-wrap: wrap;
+}
+
 .hidden {
     display: none;
 }
