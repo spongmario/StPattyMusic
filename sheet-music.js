@@ -1,7 +1,7 @@
 // Sheet Music Creator
 const canvas = document.getElementById('sheet-music-canvas');
 const ctx = canvas.getContext('2d');
-const lyricsLineDragHandle = document.getElementById('lyrics-line-drag-handle');
+const lyricsLineDragHandlesContainer = document.getElementById('lyrics-line-drag-handles-container');
 
 // Canvas dimensions
 const STAFF_WIDTH = 1400;
@@ -21,11 +21,12 @@ const SYSTEM_SPACING = 220; // vertical distance between staff systems (top-to-t
 let isLyricsEditMode = false;
 let lyricsText = '';
 
-// Manual vertical offset for the lyrics line (pixels). Positive = lower, negative = higher.
-let lyricsLineOffset = 0;
+// Manual vertical offset for each staff's lyrics line (pixels). Positive = lower, negative = higher.
+let lyricsLineOffsets = [0];
 const LYRICS_LINE_OFFSET_MIN = -80;
 const LYRICS_LINE_OFFSET_MAX = 120;
 let draggingLyricsLine = false;
+let draggingLyricsLineStaffIndex = 0;
 let lyricsDragStartY = 0;
 let lyricsDragStartOffset = 0;
 let justFinishedDraggingLyrics = false;
@@ -50,7 +51,7 @@ function resizeCanvas() {
     // Extra padding for ledger lines + hover
     canvas.height = Math.max(400, bottomOfLastStaff + 140);
     if (isLyricsEditMode) positionLyricsOverlay();
-    // Don't call positionLyricsLineDragHandle here — it uses LYRICS_LINE_DRAG_THRESHOLD which isn't defined yet on first run. Redraw will position it.
+    // Don't position drag handles here — redraw will position them (and constants may not exist on first run).
 }
 
 // Convert a staff "step" to a canvas Y coordinate.
@@ -406,11 +407,22 @@ function drawStaff(staffIndex) {
     drawKeySignature(staffIndex);
 }
 
-// Baseline Y for the lyrics line under a staff (staff 0 uses lyricsLineOffset for manual positioning).
+function getLyricsLineOffsetForStaff(staffIndex) {
+    const v = lyricsLineOffsets && lyricsLineOffsets[staffIndex];
+    return Number.isFinite(v) ? v : 0;
+}
+
+function setLyricsLineOffsetForStaff(staffIndex, value) {
+    if (!Array.isArray(lyricsLineOffsets)) lyricsLineOffsets = [];
+    while (lyricsLineOffsets.length < staffCount) lyricsLineOffsets.push(0);
+    lyricsLineOffsets[staffIndex] = value;
+}
+
+// Baseline Y for the lyrics line under a staff.
 function getLyricsBaselineY(staffIndex) {
     const STAFF_LINES = getStaffLines(staffIndex);
     const base = STAFF_LINES[4] + STAFF_SPACING * 1.2;
-    return staffIndex === 0 ? base + lyricsLineOffset : base;
+    return base + getLyricsLineOffsetForStaff(staffIndex);
 }
 
 // Draw the horizontal guideline where lyrics will sit under this staff
@@ -458,12 +470,17 @@ function getLyricsOverlayRect(staffIndex) {
     return { left, top, width, height };
 }
 
-// Hit test for the draggable lyrics line (staff 0 only). Used for drag and cursor.
+// Hit test for the draggable lyrics line (any staff). Used for cursor + blocking note placement.
 const LYRICS_LINE_DRAG_THRESHOLD = 12;
-function isPointOnLyricsLine(x, y) {
-    const baselineY = getLyricsBaselineY(0);
-    if (y < baselineY - LYRICS_LINE_DRAG_THRESHOLD || y > baselineY + LYRICS_LINE_DRAG_THRESHOLD) return false;
-    return x >= 50 && x <= STAFF_WIDTH - 50;
+function getLyricsLineHitStaffIndex(x, y) {
+    if (x < 50 || x > STAFF_WIDTH - 50) return null;
+    for (let i = 0; i < staffCount; i++) {
+        const baselineY = getLyricsBaselineY(i);
+        if (y >= baselineY - LYRICS_LINE_DRAG_THRESHOLD && y <= baselineY + LYRICS_LINE_DRAG_THRESHOLD) {
+            return i;
+        }
+    }
+    return null;
 }
 
 // Get the lyrics textarea for a given staff (when in lyrics edit mode). Used for snap-to-note.
@@ -515,23 +532,57 @@ function positionLyricsOverlay() {
     ensureLyricsOverlays();
 }
 
-// Position and show/hide the lyrics line drag handle (over the dashed line for staff 0).
-function positionLyricsLineDragHandle() {
-    if (!lyricsLineDragHandle) return;
+function ensureLyricsLineDragHandles() {
+    if (!lyricsLineDragHandlesContainer) return;
+    while (lyricsLineDragHandlesContainer.children.length > staffCount) {
+        lyricsLineDragHandlesContainer.lastChild.remove();
+    }
+    while (lyricsLineDragHandlesContainer.children.length < staffCount) {
+        const staffIndex = lyricsLineDragHandlesContainer.children.length;
+        const handle = document.createElement('div');
+        handle.className = 'lyrics-line-drag-handle';
+        handle.title = 'Drag to move lyrics line up or down';
+        handle.dataset.staffIndex = String(staffIndex);
+        handle.setAttribute('aria-hidden', 'false');
+        const icon = document.createElement('span');
+        icon.className = 'lyrics-drag-icon';
+        icon.setAttribute('aria-hidden', 'true');
+        icon.textContent = '↕';
+        handle.appendChild(icon);
+        handle.addEventListener('mousedown', (e) => {
+            e.preventDefault();
+            const rect = canvas.getBoundingClientRect();
+            const scaleY = canvas.height / rect.height;
+            draggingLyricsLine = true;
+            draggingLyricsLineStaffIndex = staffIndex;
+            lyricsDragStartY = (e.clientY - rect.top) * scaleY;
+            lyricsDragStartOffset = getLyricsLineOffsetForStaff(staffIndex);
+            handle.classList.add('dragging');
+        });
+        lyricsLineDragHandlesContainer.appendChild(handle);
+    }
+}
+
+// Position and show/hide the lyrics line drag handles (one per staff).
+function positionLyricsLineDragHandles() {
+    if (!lyricsLineDragHandlesContainer) return;
     if (isLyricsEditMode) {
-        lyricsLineDragHandle.classList.add('hidden');
-        lyricsLineDragHandle.setAttribute('aria-hidden', 'true');
+        lyricsLineDragHandlesContainer.setAttribute('aria-hidden', 'true');
         return;
     }
-    const baselineY = getLyricsBaselineY(0);
-    const top = baselineY - LYRICS_LINE_DRAG_THRESHOLD;
-    const height = LYRICS_LINE_DRAG_THRESHOLD * 2;
-    lyricsLineDragHandle.style.left = '50px';
-    lyricsLineDragHandle.style.top = top + 'px';
-    lyricsLineDragHandle.style.width = (STAFF_WIDTH - 100) + 'px';
-    lyricsLineDragHandle.style.height = height + 'px';
-    lyricsLineDragHandle.classList.remove('hidden');
-    lyricsLineDragHandle.setAttribute('aria-hidden', 'false');
+    ensureLyricsLineDragHandles();
+    lyricsLineDragHandlesContainer.setAttribute('aria-hidden', 'false');
+    for (let i = 0; i < staffCount; i++) {
+        const handle = lyricsLineDragHandlesContainer.children[i];
+        if (!handle) continue;
+        const baselineY = getLyricsBaselineY(i);
+        const top = baselineY - LYRICS_LINE_DRAG_THRESHOLD;
+        const height = LYRICS_LINE_DRAG_THRESHOLD * 2;
+        handle.style.left = '50px';
+        handle.style.top = top + 'px';
+        handle.style.width = (STAFF_WIDTH - 100) + 'px';
+        handle.style.height = height + 'px';
+    }
 }
 
 // Measure text width using a hidden span; copy textarea's computed font so it matches exactly.
@@ -1069,7 +1120,7 @@ function redraw() {
         ctx.restore();
     }
 
-    if (!isLyricsEditMode) positionLyricsLineDragHandle();
+    if (!isLyricsEditMode) positionLyricsLineDragHandles();
 }
 
 // Get key signature width (for note placement)
@@ -1140,7 +1191,7 @@ function clearAll() {
 
 // --- Save / Open (localStorage + file) ---
 const SAVE_STORAGE_KEY = 'stpatty-sheet-music-project';
-const SAVE_VERSION = 1;
+const SAVE_VERSION = 2;
 
 /** Non-null while "Resume or Delete?" dialog is showing (blocks overwriting save with empty canvas). */
 var savedSongData = null;
@@ -1153,7 +1204,7 @@ function getStateForSave() {
         sheetTitle: sheetTitle || '',
         staffCount: staffCount,
         lyricsText: lyricsText || '',
-        lyricsLineOffset: lyricsLineOffset,
+        lyricsLineOffsets: Array.isArray(lyricsLineOffsets) ? lyricsLineOffsets.slice(0, staffCount) : [],
         currentKey: currentKey,
         currentClef: currentClef,
         currentDuration: currentDuration,
@@ -1165,6 +1216,7 @@ function hasMeaningfulSheetState() {
     return notes.length > 0 ||
         (sheetTitle && sheetTitle.trim()) ||
         (lyricsText && lyricsText.trim()) ||
+        (Array.isArray(lyricsLineOffsets) && lyricsLineOffsets.some(v => Number(v) !== 0)) ||
         staffCount > 1 ||
         currentKey !== 'C' ||
         currentClef !== 'treble' ||
@@ -1197,12 +1249,19 @@ function schedulePersistSheetToBrowser() {
 function loadState(data) {
     if (!data || typeof data !== 'object') return false;
     const v = data.version;
-    if (v !== 1) return false;
+    if (v !== 1 && v !== 2) return false;
 
     sheetTitle = data.sheetTitle || '';
     staffCount = Math.max(1, Number(data.staffCount) || 1);
     lyricsText = data.lyricsText || '';
-    lyricsLineOffset = Number(data.lyricsLineOffset) || 0;
+    if (Array.isArray(data.lyricsLineOffsets)) {
+        lyricsLineOffsets = data.lyricsLineOffsets.map(n => Number(n) || 0);
+    } else {
+        // Back-compat: older saves only had a single offset for the first staff.
+        lyricsLineOffsets = [];
+        lyricsLineOffsets[0] = Number(data.lyricsLineOffset) || 0;
+    }
+    while (lyricsLineOffsets.length < staffCount) lyricsLineOffsets.push(0);
     currentKey = data.currentKey && KEY_SIGNATURES[data.currentKey] ? data.currentKey : 'C';
     currentClef = data.currentClef === 'treble' ? 'treble' : 'bass';
     currentDuration = ['whole', 'half', 'quarter', 'eighth', 'sixteenth'].includes(data.currentDuration) ? data.currentDuration : 'quarter';
@@ -1415,7 +1474,7 @@ function updateHoverFromEvent(e) {
     }
 
     // When not in edit mode, hovering over the lyrics line shows drag cursor and no note preview
-    if (!isLyricsEditMode && isPointOnLyricsLine(x, y)) {
+    if (!isLyricsEditMode && getLyricsLineHitStaffIndex(x, y) !== null) {
         hoveredPlacement = null;
         hoveredNoteId = null;
         canvas.style.cursor = 'ns-resize';
@@ -1561,7 +1620,7 @@ canvas.addEventListener('click', (e) => {
         justFinishedDraggingLyrics = false;
         return;
     }
-    if (isPointOnLyricsLine(x, y)) return; // don't place a note when clicking the lyrics line
+    if (getLyricsLineHitStaffIndex(x, y) !== null) return; // don't place a note when clicking a lyrics line
     const staffIndex = getStaffIndexFromY(y);
     if (staffIndex === null) return;
 
@@ -1702,36 +1761,26 @@ canvas.addEventListener('contextmenu', (e) => {
     openNoteEditPopupAtClientPoint(hit.id, e.clientX, e.clientY);
 });
 
-// Start dragging the lyrics line when mousedown on the dedicated drag handle (so it's never blocked)
-if (lyricsLineDragHandle) {
-    lyricsLineDragHandle.addEventListener('mousedown', (e) => {
-        e.preventDefault();
-        const rect = canvas.getBoundingClientRect();
-        const scaleY = canvas.height / rect.height;
-        draggingLyricsLine = true;
-        lyricsDragStartY = (e.clientY - rect.top) * scaleY;
-        lyricsDragStartOffset = lyricsLineOffset;
-        lyricsLineDragHandle.classList.add('dragging');
-    });
-}
-
 document.addEventListener('mousemove', (e) => {
     if (!draggingLyricsLine) return;
     const rect = canvas.getBoundingClientRect();
     const scaleY = canvas.height / rect.height;
     const currentY = (e.clientY - rect.top) * scaleY;
     const delta = currentY - lyricsDragStartY;
-    lyricsLineOffset = Math.max(LYRICS_LINE_OFFSET_MIN, Math.min(LYRICS_LINE_OFFSET_MAX, lyricsDragStartOffset + delta));
+    const next = Math.max(LYRICS_LINE_OFFSET_MIN, Math.min(LYRICS_LINE_OFFSET_MAX, lyricsDragStartOffset + delta));
+    setLyricsLineOffsetForStaff(draggingLyricsLineStaffIndex, next);
     redraw();
     if (isLyricsEditMode) positionLyricsOverlay();
-    else positionLyricsLineDragHandle();
+    else positionLyricsLineDragHandles();
 });
 
 document.addEventListener('mouseup', () => {
     if (draggingLyricsLine) {
         justFinishedDraggingLyrics = true;
         draggingLyricsLine = false;
-        if (lyricsLineDragHandle) lyricsLineDragHandle.classList.remove('dragging');
+        if (lyricsLineDragHandlesContainer && lyricsLineDragHandlesContainer.children[draggingLyricsLineStaffIndex]) {
+            lyricsLineDragHandlesContainer.children[draggingLyricsLineStaffIndex].classList.remove('dragging');
+        }
         schedulePersistSheetToBrowser();
     }
 });
@@ -1908,10 +1957,7 @@ function toggleLyricsMode() {
             ensureLyricsOverlays();
             lyricsOverlaysContainer.classList.remove('hidden');
             lyricsOverlaysContainer.setAttribute('aria-hidden', 'false');
-            if (lyricsLineDragHandle) {
-                lyricsLineDragHandle.classList.add('hidden');
-                lyricsLineDragHandle.setAttribute('aria-hidden', 'true');
-            }
+            if (lyricsLineDragHandlesContainer) lyricsLineDragHandlesContainer.setAttribute('aria-hidden', 'true');
             const firstTa = getLyricsTextareaForStaff(0);
             if (firstTa) setTimeout(() => firstTa.focus(), 0);
         } else {
@@ -1923,7 +1969,7 @@ function toggleLyricsMode() {
             lyricsText = lines.join('\n');
             lyricsOverlaysContainer.classList.add('hidden');
             lyricsOverlaysContainer.setAttribute('aria-hidden', 'true');
-            positionLyricsLineDragHandle();
+            positionLyricsLineDragHandles();
         }
     }
     updateLyricsButton();
@@ -2060,6 +2106,7 @@ document.addEventListener('keydown', (e) => {
 
 function addLine() {
     staffCount += 1;
+    while (lyricsLineOffsets.length < staffCount) lyricsLineOffsets.push(0);
     resizeCanvas();
     hoveredPlacement = null;
     redraw();
