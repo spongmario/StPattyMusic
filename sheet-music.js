@@ -244,6 +244,7 @@ let sheetTitle = '';
 let hoveredPlacement = null; // { x, staffIndex, step, y, note, octave, duration }
 let selectedNoteId = null;
 let hoveredNoteId = null;
+let isNoteEditPopupOpen = false;
 let nextNoteId = 1;
 
 // Note drag state
@@ -700,6 +701,18 @@ function drawNote(x, staffIndex, step, note, octave, duration, isSelected = fals
     } else {
         ctx.fillStyle = fillColor;
         ctx.fill();
+    }
+
+    // Selected-note highlight: blue outline ring around the note head.
+    // (Used when selectedNoteId is set.)
+    if (isSelected) {
+        ctx.save();
+        ctx.strokeStyle = '#2563eb';
+        ctx.lineWidth = 4;
+        ctx.beginPath();
+        ctx.ellipse(x, noteY, NOTE_WIDTH / 2 + 4, NOTE_HEIGHT / 2 + 4, 0, 0, 2 * Math.PI);
+        ctx.stroke();
+        ctx.restore();
     }
 
     if (isPreview) {
@@ -1495,9 +1508,13 @@ function updateHoverFromEvent(e) {
     const { x, y } = canvasCoordsFromEvent(e);
     const staffIndex = getStaffIndexFromY(y);
     if (staffIndex === null) {
+        if (selectedNoteId && !draggingNote && !isNoteEditPopupOpen) {
+            selectedNoteId = null;
+        }
         hoveredPlacement = null;
         hoveredNoteId = null;
-        canvas.style.cursor = '';
+        // In lyrics edit mode we don't want the canvas to show a placement crosshair.
+        canvas.style.cursor = isLyricsEditMode ? 'default' : '';
         redraw();
         return;
     }
@@ -1510,7 +1527,7 @@ function updateHoverFromEvent(e) {
         redraw();
         return;
     }
-    canvas.style.cursor = '';
+    canvas.style.cursor = isLyricsEditMode ? 'default' : '';
 
     // When lyrics mode is active, we keep note interactions for snapping only (handled elsewhere).
     if (isLyricsEditMode) {
@@ -1557,12 +1574,21 @@ function updateHoverFromEvent(e) {
         octave: pitch.octave,
         duration
     };
+
+    // Returning to placement preview mode means the selection highlight should go away.
+    if (selectedNoteId && !draggingNote && !isNoteEditPopupOpen) {
+        selectedNoteId = null;
+    }
     redraw();
 }
 
 canvas.addEventListener('mousemove', updateHoverFromEvent);
 canvas.addEventListener('mouseleave', () => {
+    if (selectedNoteId && !draggingNote && !isNoteEditPopupOpen) {
+        selectedNoteId = null;
+    }
     hoveredPlacement = null;
+    hoveredNoteId = null;
     canvas.style.cursor = '';
     redraw();
 });
@@ -1755,6 +1781,7 @@ document.addEventListener('mouseup', () => {
 function openNoteEditPopupAtClientPoint(noteId, clientX, clientY) {
     selectedNoteId = noteId;
     if (!noteEditOverlay) return;
+    isNoteEditPopupOpen = true;
     const dialog = noteEditOverlay.querySelector('.note-edit-dialog');
     if (dialog) {
         const pad = 12;
@@ -1985,6 +2012,8 @@ function updateLyricsButton() {
 
 function toggleLyricsMode() {
     isLyricsEditMode = !isLyricsEditMode;
+    // Override the canvas cursor while editing lyrics; the textarea itself keeps the crosshair.
+    if (canvas) canvas.style.cursor = isLyricsEditMode ? 'default' : '';
     if (lyricsOverlaysContainer) {
         if (isLyricsEditMode) {
             ensureLyricsOverlays();
@@ -2015,12 +2044,14 @@ function toggleLyricsMode() {
 function openNoteEditPopup(noteId) {
     selectedNoteId = noteId;
     if (!noteEditOverlay) return;
+    isNoteEditPopupOpen = true;
     noteEditOverlay.classList.remove('hidden');
     noteEditOverlay.setAttribute('aria-hidden', 'false');
 }
 
 function closeNoteEditPopup() {
     if (!noteEditOverlay) return;
+    isNoteEditPopupOpen = false;
     noteEditOverlay.classList.add('hidden');
     noteEditOverlay.setAttribute('aria-hidden', 'true');
 }

@@ -561,6 +561,7 @@ h1 {
     flex: 0 0 auto;
     height: calc(1.4em + 10px);
     width: 100%;
+    cursor: crosshair;
     pointer-events: auto; /* textarea still receives focus and typing */
     padding: 4px 8px;
     border: 1px solid rgba(122, 144, 112, 0.5);
