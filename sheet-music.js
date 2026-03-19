@@ -68,6 +68,53 @@ let currentClef = 'bass';
 // Current key signature (default: C)
 let currentKey = 'C';
 
+// Whether the title should display the major key name or the relative minor key name.
+// This does NOT affect the key signature accidentals; it only changes the label shown under the title.
+let keyDisplayMode = 'major'; // 'major' | 'minor'
+
+const RELATIVE_MINOR_BY_MAJOR = {
+    'C': 'Am',
+    'G': 'Em',
+    'D': 'Bm',
+    'A': 'F#m',
+    'E': 'C#m',
+    'B': 'G#m',
+    'F#': 'D#m',
+    'C#': 'A#m',
+    'F': 'Dm',
+    'Bb': 'Gm',
+    'Eb': 'Cm',
+    'Ab': 'Fm',
+    'Db': 'Bbm',
+    'Gb': 'Ebm',
+    'Cb': 'Abm'
+};
+
+function getDisplayKeyName() {
+    if (keyDisplayMode === 'minor') {
+        return RELATIVE_MINOR_BY_MAJOR[currentKey] || (currentKey + 'm');
+    }
+    return currentKey;
+}
+
+function updateKeyDisplayModeButton() {
+    const btn = document.getElementById('key-display-mode-btn');
+    if (!btn) return;
+    const isMinor = keyDisplayMode === 'minor';
+    btn.textContent = isMinor ? 'Min' : 'Maj';
+    btn.classList.toggle('key-display-mode-btn-minor', isMinor);
+    btn.title = isMinor
+        ? 'Title shows the relative minor key name (toggle to show major)'
+        : 'Title shows the major key name (toggle to show relative minor)';
+}
+
+function toggleKeyDisplayMode() {
+    keyDisplayMode = keyDisplayMode === 'minor' ? 'major' : 'minor';
+    updateKeyDisplayModeButton();
+    redraw();
+    schedulePersistSheetToBrowser();
+}
+
 // Key signature definitions
 // Order of sharps: F, C, G, D, A, E, B
 // Order of flats: B, E, A, D, G, C, F
@@ -1066,7 +1113,7 @@ function drawTitleAndKey() {
     // Key label under the title, using current key signature
     ctx.font = '24px serif';
     const keyLabelY = titleY + keyOffsetFromTitle;
-    ctx.fillText(`Key of ${currentKey}`, centerX, keyLabelY);
+    ctx.fillText(`Key of ${getDisplayKeyName()}`, centerX, keyLabelY);
 
     ctx.restore();
 }
@@ -1226,6 +1273,8 @@ function clearAll() {
     currentKey = 'C';
     const keySelect = document.getElementById('key-select');
     if (keySelect) keySelect.value = currentKey;
+    keyDisplayMode = 'major';
+    updateKeyDisplayModeButton();
     updateFlatsButtonState();
 
     // Redraw and persist cleared state
@@ -1235,7 +1284,7 @@ function clearAll() {
 
 // --- Save / Open (localStorage + file) ---
 const SAVE_STORAGE_KEY = 'stpatty-sheet-music-project';
-const SAVE_VERSION = 2;
+const SAVE_VERSION = 3;
 
 /** Non-null while "Resume or Delete?" dialog is showing (blocks overwriting save with empty canvas). */
 var savedSongData = null;
@@ -1248,6 +1297,7 @@ function getStateForSave() {
         lyricsText: lyricsText || '',
         lyricsLineOffsets: Array.isArray(lyricsLineOffsets) ? lyricsLineOffsets.slice(0, staffCount) : [],
         currentKey: currentKey,
+        keyDisplayMode: keyDisplayMode,
         currentClef: currentClef,
         currentDuration: currentDuration,
         notes: JSON.parse(JSON.stringify(notes))
@@ -1292,7 +1342,7 @@ function schedulePersistSheetToBrowser() {
 function loadState(data) {
     if (!data || typeof data !== 'object') return false;
     const v = data.version;
-    if (v !== 1 && v !== 2) return false;
+    if (v !== 1 && v !== 2 && v !== 3) return false;
 
     sheetTitle = data.sheetTitle || '';
     staffCount = Math.max(1, Number(data.staffCount) || 1);
@@ -1306,6 +1356,7 @@ function loadState(data) {
     }
     while (lyricsLineOffsets.length < staffCount) lyricsLineOffsets.push(0);
     currentKey = data.currentKey && KEY_SIGNATURES[data.currentKey] ? data.currentKey : 'C';
+    keyDisplayMode = data.keyDisplayMode === 'minor' ? 'minor' : 'major';
     currentClef = data.currentClef === 'treble' ? 'treble' : 'bass';
     currentDuration = ['whole', 'half', 'quarter', 'eighth', 'sixteenth'].includes(data.currentDuration) ? data.currentDuration : 'quarter';
 
@@ -1340,6 +1391,7 @@ function loadState(data) {
     const clefSelect = document.getElementById('clef-select');
     if (keySelect) keySelect.value = currentKey;
     if (clefSelect) clefSelect.value = currentClef;
+    updateKeyDisplayModeButton();
     setDuration(currentDuration);
     resizeCanvas();
     updateTitleButton();
@@ -1890,6 +1942,11 @@ document.addEventListener('click', function (e) {
 });
 document.getElementById('clef-select').addEventListener('change', changeClef);
 document.getElementById('key-select').addEventListener('change', changeKey);
+const keyDisplayModeBtn = document.getElementById('key-display-mode-btn');
+if (keyDisplayModeBtn) {
+    keyDisplayModeBtn.addEventListener('click', toggleKeyDisplayMode);
+    updateKeyDisplayModeButton();
+}
 
 function exportToPDF() {
     // Render the canvas to an image and print it in a clean window.

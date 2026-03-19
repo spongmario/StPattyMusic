@@ -99,6 +99,36 @@ h1 {
     box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
 }
 
+.key-display-mode-btn {
+    padding: 6px 10px;
+    border: 2px solid rgba(122, 144, 112, 0.55);
+    border-radius: 999px;
+    background: #fff;
+    color: #6b7d5a;
+    font-size: 12px;
+    font-weight: 700;
+    cursor: pointer;
+    line-height: 1;
+    transition: all 0.2s ease;
+}
+
+.key-display-mode-btn:hover {
+    border-color: #6b7d5a;
+    background: #faf8f4;
+    transform: translateY(-1px);
+}
+
+.key-display-mode-btn:focus {
+    outline: none;
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+}
+
+.key-display-mode-btn.key-display-mode-btn-minor {
+    border-color: rgba(102, 126, 234, 0.55);
+    color: #4338ca;
+}
+
 .btn {
     padding: 10px 20px;
     border: none;
