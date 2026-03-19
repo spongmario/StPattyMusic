@@ -1,6 +1,16 @@
 // Piano configuration
-const OCTAVES = 2; // Number of octaves to display
+// Range is inclusive and uses scientific pitch notation (e.g. A2, C#4).
+// Extended a few keys on each end from the previous C3→B4 range.
+const PIANO_RANGE = {
+    start: { note: 'A', octave: 2 }, // A2 (adds A2, A#2, B2)
+    end: { note: 'D', octave: 5 }    // D5 (removes the top D#5 and E5)
+};
+
 const NOTES = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+const NOTE_TO_SEMITONE = NOTES.reduce((acc, n, i) => {
+    acc[n] = i;
+    return acc;
+}, {});
 
 // Key definitions (major and minor scales)
 const KEY_SCALES = {
@@ -35,6 +45,19 @@ const KEY_SCALES = {
 // Audio context for sound generation
 let audioContext;
 let currentKey = null;
+
+function getCssPxVar(varName, fallbackPx) {
+    const raw = getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+    const value = Number.parseFloat(raw);
+    return Number.isFinite(value) ? value : fallbackPx;
+}
+
+function noteToMidi(note, octave) {
+    const semitone = NOTE_TO_SEMITONE[note];
+    if (semitone == null) return null;
+    // MIDI: C-1 = 0, C4 = 60 -> (octave + 1) * 12
+    return (octave + 1) * 12 + semitone;
+}
 
 // Initialize audio context
 function initAudio() {
@@ -173,34 +196,47 @@ function createPiano() {
     piano.innerHTML = '';
     
     const whiteKeys = ['C', 'D', 'E', 'F', 'G', 'A', 'B'];
+    const whiteKeyWidth = getCssPxVar('--white-key-width', 60);
+    const blackKeyWidth = getCssPxVar('--black-key-width', 40);
     let whiteKeyIndex = 0;
+
+    const startMidi = noteToMidi(PIANO_RANGE.start.note, PIANO_RANGE.start.octave);
+    const endMidi = noteToMidi(PIANO_RANGE.end.note, PIANO_RANGE.end.octave);
+    if (startMidi == null || endMidi == null) return;
+    const minMidi = Math.min(startMidi, endMidi);
+    const maxMidi = Math.max(startMidi, endMidi);
+
+    const isMidiInRange = (midi) => midi != null && midi >= minMidi && midi <= maxMidi;
     
     // First, create all white keys
-    for (let octave = 3; octave < 3 + OCTAVES; octave++) {
+    for (let octave = PIANO_RANGE.start.octave; octave <= PIANO_RANGE.end.octave; octave++) {
         whiteKeys.forEach((note) => {
+            const midi = noteToMidi(note, octave);
+            if (!isMidiInRange(midi)) return;
+
             const keyElement = document.createElement('div');
             keyElement.className = 'piano-key white-key';
             keyElement.dataset.note = note;
             keyElement.dataset.octave = octave;
-            
+
             const label = document.createElement('div');
             label.className = 'key-label';
             label.textContent = note;
             keyElement.appendChild(label);
-            
+
             keyElement.addEventListener('mousedown', () => {
                 keyElement.classList.add('active');
                 playNote(note, octave);
             });
-            
+
             keyElement.addEventListener('mouseup', () => {
                 keyElement.classList.remove('active');
             });
-            
+
             keyElement.addEventListener('mouseleave', () => {
                 keyElement.classList.remove('active');
             });
-            
+
             piano.appendChild(keyElement);
             whiteKeyIndex++;
         });
@@ -209,48 +245,51 @@ function createPiano() {
     // Then, create all black keys positioned absolutely
     // We need to position them relative to the white keys
     whiteKeyIndex = 0;
-    for (let octave = 3; octave < 3 + OCTAVES; octave++) {
+    for (let octave = PIANO_RANGE.start.octave; octave <= PIANO_RANGE.end.octave; octave++) {
         whiteKeys.forEach((note) => {
+            const whiteMidi = noteToMidi(note, octave);
+            const whiteInRange = isMidiInRange(whiteMidi);
+
             // Add black keys between certain white keys
             if (note === 'C' || note === 'D' || note === 'F' || note === 'G' || note === 'A') {
                 const blackNote = note === 'C' ? 'C#' : note === 'D' ? 'D#' : note === 'F' ? 'F#' : note === 'G' ? 'G#' : 'A#';
+                const blackMidi = noteToMidi(blackNote, octave);
+                const blackInRange = isMidiInRange(blackMidi);
                 
-                const blackKey = document.createElement('div');
-                blackKey.className = 'piano-key black-key';
-                blackKey.dataset.note = blackNote;
-                blackKey.dataset.octave = octave;
-                
-                // Calculate position: each white key is 60px wide, black key is 40px wide
-                // Black keys should be centered between white keys
-                // To center a 40px black key between two 60px white keys:
-                // - First white key ends at (whiteKeyIndex * 60) + 60
-                // - Center point is at (whiteKeyIndex * 60) + 60
-                // - Black key left edge = center - half width = 60 - 20 = 40
-                // So: (whiteKeyIndex * 60) + 40
-                const leftPosition = (whiteKeyIndex * 60) + 40;
-                blackKey.style.left = `${leftPosition}px`;
-                
-                const blackLabel = document.createElement('div');
-                blackLabel.className = 'key-label';
-                blackLabel.textContent = blackNote;
-                blackKey.appendChild(blackLabel);
-                
-                blackKey.addEventListener('mousedown', () => {
-                    blackKey.classList.add('active');
-                    playNote(blackNote, octave);
-                });
-                
-                blackKey.addEventListener('mouseup', () => {
-                    blackKey.classList.remove('active');
-                });
-                
-                blackKey.addEventListener('mouseleave', () => {
-                    blackKey.classList.remove('active');
-                });
-                
-                piano.appendChild(blackKey);
+                if (whiteInRange && blackInRange) {
+                    const blackKey = document.createElement('div');
+                    blackKey.className = 'piano-key black-key';
+                    blackKey.dataset.note = blackNote;
+                    blackKey.dataset.octave = octave;
+
+                    const leftPosition = (whiteKeyIndex * whiteKeyWidth) + (whiteKeyWidth - (blackKeyWidth / 2));
+                    blackKey.style.left = `${leftPosition}px`;
+
+                    const blackLabel = document.createElement('div');
+                    blackLabel.className = 'key-label';
+                    blackLabel.textContent = blackNote;
+                    blackKey.appendChild(blackLabel);
+
+                    blackKey.addEventListener('mousedown', () => {
+                        blackKey.classList.add('active');
+                        playNote(blackNote, octave);
+                    });
+
+                    blackKey.addEventListener('mouseup', () => {
+                        blackKey.classList.remove('active');
+                    });
+
+                    blackKey.addEventListener('mouseleave', () => {
+                        blackKey.classList.remove('active');
+                    });
+
+                    piano.appendChild(blackKey);
+                }
             }
-            whiteKeyIndex++;
+
+            if (whiteInRange) {
+                whiteKeyIndex++;
+            }
         });
     }
 }

@@ -4,6 +4,13 @@
     box-sizing: border-box;
 }
 
+:root {
+    --white-key-width: 60px;
+    --white-key-height: 300px;
+    --black-key-width: 40px;
+    --black-key-height: 180px;
+}
+
 body {
     font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
     background: linear-gradient(135deg, #f4f0e8 0%, #e8e0d4 50%, #ddd4c6 100%);
@@ -154,8 +161,8 @@ h1 {
 }
 
 .white-key {
-    width: 60px;
-    height: 300px;
+    width: var(--white-key-width);
+    height: var(--white-key-height);
     background: #fff;
     border: 1px solid #ccc;
     border-radius: 0 0 8px 8px;
@@ -185,8 +192,8 @@ h1 {
 }
 
 .black-key {
-    width: 40px;
-    height: 180px;
+    width: var(--black-key-width);
+    height: var(--black-key-height);
     background: #333;
     border-radius: 0 0 5px 5px;
     position: absolute;
@@ -236,14 +243,11 @@ h1 {
     .key-buttons {
         flex-direction: column;
     }
-    
-    .white-key {
-        width: 40px;
-        height: 200px;
-    }
-    
-    .black-key {
-        width: 28px;
-        height: 120px;
+
+    :root {
+        --white-key-width: 40px;
+        --white-key-height: 200px;
+        --black-key-width: 28px;
+        --black-key-height: 120px;
     }
 }
