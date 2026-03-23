@@ -209,6 +209,49 @@ h1 {
     margin-bottom: 0;
 }
 
+.repeat-sign-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 12px;
+    background: #f4f0e8;
+    border-radius: 10px;
+    border: 1px solid rgba(122, 144, 112, 0.3);
+    width: fit-content;
+}
+
+.repeat-sign-btn {
+    min-width: 48px;
+    height: 44px;
+    padding: 4px 10px;
+    border: 2px solid rgba(122, 144, 112, 0.4);
+    border-radius: 8px;
+    background: white;
+    cursor: pointer;
+    font-family: "Noto Music", "Segoe UI Symbol", Georgia, serif;
+    font-size: 20px;
+    font-weight: 600;
+    color: #333;
+    line-height: 1;
+    transition: all 0.2s ease;
+}
+
+.repeat-sign-btn:hover {
+    border-color: #7a9070;
+    background: #faf8f4;
+    transform: translateY(-1px);
+}
+
+.repeat-sign-btn.repeat-sign-btn-active {
+    background: #7a9070;
+    border-color: #6b7d5a;
+    color: white;
+}
+
+.repeat-sign-btn.repeat-sign-btn-active:hover {
+    background: #6b7d5a;
+}
+
 .note-type-bar-label {
     font-size: 13px;
     font-weight: 500;

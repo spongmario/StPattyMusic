@@ -277,6 +277,9 @@ const SHARP_POSITIONS = {
 
 // Store notes
 let notes = [];
+// Repeat barlines: forward repeat |: (kind 'start'), backward repeat :| (kind 'end')
+let repeatSigns = [];
+let nextRepeatSignId = 1;
 let noteHistory = [];
 // Store original notes before flat conversion (for revert)
 let originalNotesBeforeConversion = null;
@@ -289,7 +292,11 @@ let sheetTitle = '';
 
 // Hover preview + selection state
 let hoveredPlacement = null; // { x, staffIndex, step, y, note, octave, duration }
+let hoveredRepeatPlacement = null; // { staffIndex, x, kind } while repeat tool is active
 let selectedNoteId = null;
+let selectedRepeatId = null;
+/** null = place notes; 'start' | 'end' = place repeat signs */
+let repeatPlacementKind = null;
 let hoveredNoteId = null;
 let isNoteEditPopupOpen = false;
 let nextNoteId = 1;
@@ -453,6 +460,68 @@ function drawStaff(staffIndex) {
     
     // Draw key signature after clef
     drawKeySignature(staffIndex);
+}
+
+const REPEAT_STAFF_PAD = 10;
+
+function drawRepeatDotsPair(cx, y1, y2, fillStyle, dotR) {
+    ctx.fillStyle = fillStyle;
+    for (const cy of [y1, y2]) {
+        ctx.beginPath();
+        ctx.arc(cx, cy, dotR, 0, Math.PI * 2);
+        ctx.fill();
+    }
+}
+
+/** kind 'start' = forward repeat |: ; 'end' = backward repeat :| */
+function drawRepeatSignAt(staffIndex, x, kind, isSelected, isPreview) {
+    const lines = getStaffLines(staffIndex);
+    const topY = lines[0] - REPEAT_STAFF_PAD;
+    const bottomY = lines[4] + REPEAT_STAFF_PAD;
+    const yUpper = (lines[1] + lines[2]) / 2;
+    const yLower = (lines[2] + lines[3]) / 2;
+    const dotR = 2.8;
+    const stroke = isSelected ? '#2563eb' : '#333';
+    const fill = isSelected ? '#2563eb' : '#333';
+
+    ctx.save();
+    if (isPreview) ctx.globalAlpha = 0.35;
+    ctx.strokeStyle = stroke;
+    ctx.lineCap = 'square';
+
+    const vBar = (bx, thick) => {
+        ctx.beginPath();
+        ctx.lineWidth = thick ? 4 : 1.5;
+        ctx.moveTo(bx, topY);
+        ctx.lineTo(bx, bottomY);
+        ctx.stroke();
+    };
+
+    if (kind === 'start') {
+        vBar(x - 10, true);
+        vBar(x - 4, false);
+        drawRepeatDotsPair(x + 7, yUpper, yLower, fill, dotR);
+    } else {
+        drawRepeatDotsPair(x - 7, yUpper, yLower, fill, dotR);
+        vBar(x + 4, true);
+        vBar(x + 10, false);
+    }
+
+    if (isSelected) {
+        ctx.globalAlpha = isPreview ? 0.35 : 1;
+        ctx.strokeStyle = '#2563eb';
+        ctx.lineWidth = 2;
+        ctx.setLineDash([]);
+        ctx.strokeRect(x - 18, topY - 5, 36, bottomY - topY + 10);
+    }
+    ctx.restore();
+}
+
+function drawAllRepeatSigns() {
+    for (const r of repeatSigns) {
+        const sel = r.id === selectedRepeatId;
+        drawRepeatSignAt(r.staffIndex ?? 0, r.x, r.kind, sel, false);
+    }
 }
 
 function getLyricsLineOffsetForStaff(staffIndex) {
@@ -1130,6 +1199,8 @@ function redraw() {
         drawLyricsLine(i);
     }
 
+    drawAllRepeatSigns();
+
     // Pre-compute beam groups so we can avoid double-drawing stems for beamed notes.
     // Only compute beams within the same staff system.
     const groups = [];
@@ -1180,6 +1251,16 @@ function redraw() {
             true
         );
         ctx.restore();
+    }
+
+    if (hoveredRepeatPlacement) {
+        drawRepeatSignAt(
+            hoveredRepeatPlacement.staffIndex,
+            hoveredRepeatPlacement.x,
+            hoveredRepeatPlacement.kind,
+            false,
+            true
+        );
     }
 
     if (!isLyricsEditMode) positionLyricsLineDragHandles();
@@ -1233,7 +1314,10 @@ function addNoteFromPlacement(placement) {
 
 function pushHistory() {
     // Store a deep copy so edits/selection don't mutate history
-    noteHistory.push(JSON.parse(JSON.stringify(notes)));
+    noteHistory.push({
+        notes: JSON.parse(JSON.stringify(notes)),
+        repeatSigns: JSON.parse(JSON.stringify(repeatSigns))
+    });
     // Keep history from growing unbounded
     if (noteHistory.length > 200) {
         noteHistory.shift();
@@ -1245,9 +1329,14 @@ function pushHistory() {
 function clearAll() {
     // Reset musical content
     notes = [];
+    repeatSigns = [];
+    nextRepeatSignId = 1;
     noteHistory = [];
     selectedNoteId = null;
+    selectedRepeatId = null;
+    repeatPlacementKind = null;
     hoveredPlacement = null;
+    hoveredRepeatPlacement = null;
     originalNotesBeforeConversion = null;
 
     // Reset title
@@ -1276,6 +1365,7 @@ function clearAll() {
     keyDisplayMode = 'major';
     updateKeyDisplayModeButton();
     updateFlatsButtonState();
+    updateRepeatToolbarButtons();
 
     // Redraw and persist cleared state
     redraw();
@@ -1284,7 +1374,7 @@ function clearAll() {
 
 // --- Save / Open (localStorage + file) ---
 const SAVE_STORAGE_KEY = 'stpatty-sheet-music-project';
-const SAVE_VERSION = 3;
+const SAVE_VERSION = 4;
 
 /** Non-null while "Resume or Delete?" dialog is showing (blocks overwriting save with empty canvas). */
 var savedSongData = null;
@@ -1300,7 +1390,8 @@ function getStateForSave() {
         keyDisplayMode: keyDisplayMode,
         currentClef: currentClef,
         currentDuration: currentDuration,
-        notes: JSON.parse(JSON.stringify(notes))
+        notes: JSON.parse(JSON.stringify(notes)),
+        repeatSigns: JSON.parse(JSON.stringify(repeatSigns))
     };
 }
 
@@ -1310,6 +1401,7 @@ function hasMeaningfulSheetState() {
     // This avoids showing the "Saved song" prompt when they only changed
     // settings like clef/key but never started real work.
     return notes.length > 0 ||
+        repeatSigns.length > 0 ||
         (sheetTitle && sheetTitle.trim());
 }
 
@@ -1342,7 +1434,7 @@ function schedulePersistSheetToBrowser() {
 function loadState(data) {
     if (!data || typeof data !== 'object') return false;
     const v = data.version;
-    if (v !== 1 && v !== 2 && v !== 3) return false;
+    if (v !== 1 && v !== 2 && v !== 3 && v !== 4) return false;
 
     sheetTitle = data.sheetTitle || '';
     staffCount = Math.max(1, Number(data.staffCount) || 1);
@@ -1374,6 +1466,16 @@ function loadState(data) {
         };
     }) : [];
 
+    let nextRepeatIdFallback = 1;
+    repeatSigns = Array.isArray(data.repeatSigns) ? data.repeatSigns.map(function (r) {
+        return {
+            id: r.id != null ? String(r.id) : 'r' + String(nextRepeatIdFallback++),
+            staffIndex: Math.max(0, Math.min(staffCount - 1, Number(r.staffIndex) || 0)),
+            x: Number(r.x) || 0,
+            kind: r.kind === 'end' ? 'end' : 'start'
+        };
+    }) : [];
+
     let maxId = 0;
     notes.forEach(function (n) {
         const num = parseInt(n.id, 10);
@@ -1381,10 +1483,20 @@ function loadState(data) {
     });
     nextNoteId = maxId + 1;
 
+    let maxRepeatNum = 0;
+    repeatSigns.forEach(function (r) {
+        const m = /^r(\d+)$/.exec(String(r.id));
+        if (m) maxRepeatNum = Math.max(maxRepeatNum, parseInt(m[1], 10));
+    });
+    nextRepeatSignId = maxRepeatNum + 1;
+
     noteHistory = [];
     pushHistory();
     selectedNoteId = null;
+    selectedRepeatId = null;
+    repeatPlacementKind = null;
     hoveredPlacement = null;
+    hoveredRepeatPlacement = null;
     originalNotesBeforeConversion = null;
 
     const keySelect = document.getElementById('key-select');
@@ -1397,6 +1509,7 @@ function loadState(data) {
     updateTitleButton();
     updateLyricsButton();
     updateFlatsButtonState();
+    updateRepeatToolbarButtons();
     redraw();
     return true;
 }
@@ -1523,9 +1636,55 @@ function getSnappedXForCanvasX(x) {
     return Math.max(minX, Math.min(STAFF_WIDTH - 100, snappedX));
 }
 
-// True if there is already a note at this column (x) on this staff — only one note per column per staff (left/right only, no stacking).
+// True if there is already a note or repeat sign at this column on this staff.
 function isColumnOccupiedOnStaff(snappedX, staffIndex) {
-    return notes.some(n => (n.staffIndex ?? 0) === staffIndex && n.x === snappedX);
+    const s = staffIndex ?? 0;
+    return notes.some(n => (n.staffIndex ?? 0) === s && n.x === snappedX)
+        || repeatSigns.some(r => (r.staffIndex ?? 0) === s && r.x === snappedX);
+}
+
+function hitTestRepeatSign(canvasX, canvasY) {
+    const staffIndex = getStaffIndexFromY(canvasY);
+    if (staffIndex === null) return null;
+    const snappedX = getSnappedXForCanvasX(canvasX);
+    return repeatSigns.find(r => (r.staffIndex ?? 0) === staffIndex && r.x === snappedX) || null;
+}
+
+function addRepeatSignAt(staffIndex, snappedX, kind) {
+    if (isColumnOccupiedOnStaff(snappedX, staffIndex)) return;
+    repeatSigns.push({
+        id: 'r' + String(nextRepeatSignId++),
+        x: snappedX,
+        staffIndex,
+        kind
+    });
+    pushHistory();
+    redraw();
+}
+
+function setRepeatPlacementKind(kind) {
+    repeatPlacementKind = kind;
+    updateRepeatToolbarButtons();
+    hoveredRepeatPlacement = null;
+    hoveredPlacement = null;
+    redraw();
+}
+
+function updateRepeatToolbarButtons() {
+    document.querySelectorAll('.repeat-sign-btn').forEach(btn => {
+        const k = btn.dataset.repeatKind;
+        btn.classList.toggle('repeat-sign-btn-active', k === repeatPlacementKind);
+    });
+}
+
+function deleteSelectedRepeat() {
+    if (!selectedRepeatId) return;
+    const idx = repeatSigns.findIndex(r => r.id === selectedRepeatId);
+    if (idx === -1) return;
+    repeatSigns.splice(idx, 1);
+    selectedRepeatId = null;
+    pushHistory();
+    redraw();
 }
 
 function hitTestNote(canvasX, canvasY) {
@@ -1563,7 +1722,11 @@ function updateHoverFromEvent(e) {
         if (selectedNoteId && !draggingNote && !isNoteEditPopupOpen) {
             selectedNoteId = null;
         }
+        if (selectedRepeatId && !isNoteEditPopupOpen) {
+            selectedRepeatId = null;
+        }
         hoveredPlacement = null;
+        hoveredRepeatPlacement = null;
         hoveredNoteId = null;
         // In lyrics edit mode we don't want the canvas to show a placement crosshair.
         canvas.style.cursor = isLyricsEditMode ? 'default' : '';
@@ -1574,6 +1737,7 @@ function updateHoverFromEvent(e) {
     // When not in edit mode, hovering over the lyrics line shows drag cursor and no note preview
     if (!isLyricsEditMode && getLyricsLineHitStaffIndex(x, y) !== null) {
         hoveredPlacement = null;
+        hoveredRepeatPlacement = null;
         hoveredNoteId = null;
         canvas.style.cursor = 'ns-resize';
         redraw();
@@ -1584,7 +1748,57 @@ function updateHoverFromEvent(e) {
     // When lyrics mode is active, we keep note interactions for snapping only (handled elsewhere).
     if (isLyricsEditMode) {
         hoveredPlacement = null;
+        hoveredRepeatPlacement = null;
         hoveredNoteId = null;
+        redraw();
+        return;
+    }
+
+    if (repeatPlacementKind) {
+        hoveredPlacement = null;
+        const rsHit = hitTestRepeatSign(x, y);
+        if (rsHit) {
+            hoveredRepeatPlacement = null;
+            hoveredNoteId = null;
+            canvas.style.cursor = draggingNote ? 'grabbing' : 'pointer';
+            redraw();
+            return;
+        }
+        const hitR = hitTestNote(x, y);
+        hoveredNoteId = hitR ? hitR.id : null;
+        if (hitR) {
+            hoveredRepeatPlacement = null;
+            canvas.style.cursor = draggingNote ? 'grabbing' : 'pointer';
+            redraw();
+            return;
+        }
+        const snappedRX = getSnappedXForCanvasX(x);
+        if (isColumnOccupiedOnStaff(snappedRX, staffIndex)) {
+            hoveredRepeatPlacement = null;
+            hoveredNoteId = null;
+            redraw();
+            return;
+        }
+        hoveredRepeatPlacement = {
+            staffIndex,
+            x: snappedRX,
+            kind: repeatPlacementKind
+        };
+        hoveredNoteId = null;
+        if (selectedNoteId && !draggingNote && !isNoteEditPopupOpen) selectedNoteId = null;
+        if (selectedRepeatId && !isNoteEditPopupOpen) selectedRepeatId = null;
+        canvas.style.cursor = 'crosshair';
+        redraw();
+        return;
+    }
+
+    hoveredRepeatPlacement = null;
+
+    const rsHover = hitTestRepeatSign(x, y);
+    if (rsHover) {
+        hoveredPlacement = null;
+        hoveredNoteId = null;
+        canvas.style.cursor = 'pointer';
         redraw();
         return;
     }
@@ -1639,7 +1853,11 @@ canvas.addEventListener('mouseleave', () => {
     if (selectedNoteId && !draggingNote && !isNoteEditPopupOpen) {
         selectedNoteId = null;
     }
+    if (selectedRepeatId && !isNoteEditPopupOpen) {
+        selectedRepeatId = null;
+    }
     hoveredPlacement = null;
+    hoveredRepeatPlacement = null;
     hoveredNoteId = null;
     canvas.style.cursor = '';
     redraw();
@@ -1648,11 +1866,20 @@ canvas.addEventListener('mouseleave', () => {
 // Set duration from Note shortcut bar or keys 1–5; update hover preview
 function setDuration(value) {
     currentDuration = value;
+    let clearedRepeatTool = false;
+    if (repeatPlacementKind) {
+        repeatPlacementKind = null;
+        updateRepeatToolbarButtons();
+        hoveredRepeatPlacement = null;
+        clearedRepeatTool = true;
+    }
     document.querySelectorAll('.note-type-btn').forEach(btn => {
         btn.classList.toggle('note-type-btn-active', btn.dataset.duration === value);
     });
     if (hoveredPlacement) {
         hoveredPlacement.duration = value;
+        redraw();
+    } else if (clearedRepeatTool) {
         redraw();
     }
     schedulePersistSheetToBrowser();
@@ -1661,6 +1888,14 @@ function setDuration(value) {
 // Note shortcut bar (right above staff)
 document.querySelectorAll('.note-type-btn').forEach(btn => {
     btn.addEventListener('click', () => setDuration(btn.dataset.duration));
+});
+
+document.querySelectorAll('.repeat-sign-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const k = btn.dataset.repeatKind;
+        if (repeatPlacementKind === k) setRepeatPlacementKind(null);
+        else setRepeatPlacementKind(k);
+    });
 });
 
 // Keyboard shortcuts 1–5 for duration (when not typing in an input)
@@ -1735,21 +1970,41 @@ canvas.addEventListener('click', (e) => {
     const staffIndex = getStaffIndexFromY(y);
     if (staffIndex === null) return;
 
-    const hit = hitTestNote(x, y);
-    if (hit) {
-        selectedNoteId = hit.id;
+    const repeatHit = hitTestRepeatSign(x, y);
+    if (repeatHit) {
+        selectedRepeatId = repeatHit.id;
+        selectedNoteId = null;
         redraw();
         return;
     }
 
-    if (!hit && hoveredPlacement) {
+    const hit = hitTestNote(x, y);
+    if (hit) {
+        selectedNoteId = hit.id;
+        selectedRepeatId = null;
+        redraw();
+        return;
+    }
+
+    if (repeatPlacementKind && hoveredRepeatPlacement) {
         selectedNoteId = null;
+        selectedRepeatId = null;
+        addRepeatSignAt(
+            hoveredRepeatPlacement.staffIndex,
+            hoveredRepeatPlacement.x,
+            repeatPlacementKind
+        );
+        return;
+    }
+
+    if (hoveredPlacement) {
+        selectedNoteId = null;
+        selectedRepeatId = null;
         addNoteFromPlacement(hoveredPlacement);
-    } else {
-        if (selectedNoteId) {
-            selectedNoteId = null;
-            redraw();
-        }
+    } else if (selectedNoteId || selectedRepeatId) {
+        selectedNoteId = null;
+        selectedRepeatId = null;
+        redraw();
     }
 });
 
@@ -1814,6 +2069,7 @@ canvas.addEventListener('mousedown', (e) => {
     if (e.button !== 0) return; // left only
     const { x, y } = canvasCoordsFromEvent(e);
     if (justFinishedDraggingLyrics) return;
+    if (hitTestRepeatSign(x, y)) return;
     const hit = hitTestNote(x, y);
     if (!hit) return;
     e.preventDefault();
@@ -1904,7 +2160,9 @@ function changeClef() {
 
     // Clear selection on clef swap (notes will visually shift in this app's system)
     selectedNoteId = null;
+    selectedRepeatId = null;
     hoveredPlacement = null;
+    hoveredRepeatPlacement = null;
     redraw();
     schedulePersistSheetToBrowser();
 }
@@ -2217,8 +2475,16 @@ if (noteEditOverlay) {
 // Keyboard delete/backspace removes selected note (when not typing)
 document.addEventListener('keydown', (e) => {
     if (/^(input|textarea)$/i.test(document.activeElement?.tagName)) return;
+    if (e.key === 'Escape' && repeatPlacementKind) {
+        setRepeatPlacementKind(null);
+        e.preventDefault();
+        return;
+    }
     if (e.key === 'Delete' || e.key === 'Backspace') {
-        if (selectedNoteId) {
+        if (selectedRepeatId) {
+            e.preventDefault();
+            deleteSelectedRepeat();
+        } else if (selectedNoteId) {
             e.preventDefault();
             deleteSelectedNote();
         }
@@ -2406,7 +2672,7 @@ if (convertFlatsBtn) {
             return;
         }
         var data = JSON.parse(raw);
-        if (!data || data.version !== SAVE_VERSION) {
+        if (!data || (data.version !== 3 && data.version !== 4)) {
             return;
         }
         savedSongData = data;
@@ -2418,6 +2684,8 @@ if (convertFlatsBtn) {
         }
     } catch (e) { /* ignore */ }
 })();
+
+updateRepeatToolbarButtons();
 
 // Initialize history so undo works from first action
 pushHistory();
